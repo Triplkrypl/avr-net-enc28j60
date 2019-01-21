@@ -32,6 +32,7 @@
 #define IP_PROTO_TCP_V		0x06
 #define IP_PROTO_UDP_V		0x11
 #define IP_V4_V				0x40
+#define IP_V4_ADDRESS_SIZE  4
 #define IP_HEADER_LENGTH_V	0x05
 
 #define IP_P				0x0E
@@ -59,6 +60,7 @@
 //void ip_fill_ip_address( unsigned char *buf, unsigned char *avr_ip, unsigned char *dest_ip );
 //void ip_fill_hdr_checksum( unsigned char *buf );
 
+// todo refactor
 BYTE ip_packet_is_ip ( BYTE *rxtx_buffer );
 void ip_generate_header(unsigned char *rxtx_buffer, WORD_BYTES total_length, unsigned char protocol, const unsigned char *dest_ip);
 #endif

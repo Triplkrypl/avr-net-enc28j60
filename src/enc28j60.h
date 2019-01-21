@@ -279,6 +279,8 @@
 // max frame length which the conroller will accept:
 #define MAX_FRAMELEN	(1500+sizeof(ETH_HEADER)+4)        // maximum ethernet frame length
 
+#define MAC_ADDRESS_SIZE 6
+
 // functions
 BYTE enc28j60ReadOp(BYTE op, BYTE address);
 void enc28j60WriteOp(BYTE op, BYTE address, BYTE data);

@@ -10,8 +10,8 @@
 
 // todo rozkouskovat do jednotlivych protokolu
 void NetHandleIncomingPacket(unsigned char *buffer, unsigned short length){
- unsigned char src_mac[6];
- memcpy(src_mac, buffer + ETH_SRC_MAC_P, 6);
+ unsigned char src_mac[MAC_ADDRESS_SIZE];
+ memcpy(src_mac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
  if(arp_packet_is_arp(buffer, ARP_OPCODE_REQUEST_V)){
   arp_send_reply(buffer, src_mac);
   return;

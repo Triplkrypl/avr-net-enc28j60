@@ -60,9 +60,9 @@
 // Prototype function
 //
 //********************************************************************************************
-extern void arp_generate_packet ( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned char *dest_ip );// todo refactor
-extern void arp_send_request ( BYTE *rxtx_buffer, const unsigned char *dest_ip );// todo refactor
-extern void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac );// todo refactor
-extern BYTE arp_packet_is_arp ( BYTE *rxtx_buffer, unsigned short opcode );// todo refactor
-extern unsigned char arpWhoIs(unsigned char *rxtx_buffer, const unsigned char *dest_ip, unsigned char *dest_mac);
+void arp_generate_packet ( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned char *dest_ip );// todo refactor
+void arp_send_request ( BYTE *rxtx_buffer, const unsigned char *dest_ip );// todo refactor
+void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac );// todo refactor
+BYTE arp_packet_is_arp ( BYTE *rxtx_buffer, unsigned short opcode );// todo refactor
+unsigned char ArpWhoIs(unsigned char *rxtx_buffer, const unsigned char *dest_ip, unsigned char *dest_mac);
 #endif

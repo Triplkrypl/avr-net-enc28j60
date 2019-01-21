@@ -57,7 +57,7 @@ static WORD_BYTES ip_identfier=(WORD_BYTES){1};
 // Description : generate all ip header
 //
 //********************************************************************************************
-void ip_generate_header(BYTE *rxtx_buffer, WORD_BYTES total_length, BYTE protocol, const unsigned char *dest_ip)
+void ip_generate_header(BYTE *rxtx_buffer, WORD_BYTES total_length, BYTE protocol, const unsigned char dest_ip[IP_V4_ADDRESS_SIZE])
 {
 	BYTE i;
 	WORD_BYTES ck;
@@ -115,7 +115,7 @@ BYTE ip_packet_is_ip(BYTE *rxtx_buffer){
   return 0;
  }
  // if ip packet not send to avr
- if(memcmp(avr_ip, rxtx_buffer, sizeof(IP_ADDR) != 0)) {
+ if(memcmp(avr_ip, rxtx_buffer + IP_DST_IP_P, IP_V4_ADDRESS_SIZE) != 0){
   return 0;
  }
  return 1;

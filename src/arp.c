@@ -29,15 +29,15 @@
 #include <string.h>
 //********************************************************************************************
 //
-// Address Resolution Protocol (ARP) is the method for finding a host's hardware address 
-// when only its network layer address is known. 
-// Due to the overwhelming prevalence of IPv4 and Ethernet, 
-// ARP is primarily used to translate IP addresses to Ethernet MAC addresses. 
-// It is also used for IP over other LAN technologies, 
+// Address Resolution Protocol (ARP) is the method for finding a host's hardware address
+// when only its network layer address is known.
+// Due to the overwhelming prevalence of IPv4 and Ethernet,
+// ARP is primarily used to translate IP addresses to Ethernet MAC addresses.
+// It is also used for IP over other LAN technologies,
 // such as Token Ring, FDDI, or IEEE 802.11, and for IP over ATM.
 //
 // ARP is used in four cases of two hosts communicating:
-// 
+//
 //   1. When two hosts are on the same network and one desires to send a packet to the other
 //   2. When two hosts are on different networks and must use a gateway/router to reach the other host
 //   3. When a router needs to forward a packet for one host through another router
@@ -46,7 +46,7 @@
 // +------------+------------+-----------+
 // + MAC header + ARP header +	Data ::: +
 // +------------+------------+-----------+
-// 
+//
 // ARP header
 //
 // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -78,11 +78,11 @@ unsigned char avr_ip[4] = {NET_IP};
 void arp_generate_packet ( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned char *dest_ip )
 {
 	unsigned char i;
-	
+
 	// setup hardware type to ethernet 0x0001
 	rxtx_buffer[ ARP_HARDWARE_TYPE_H_P ] = ARP_HARDWARE_TYPE_H_V;
 	rxtx_buffer[ ARP_HARDWARE_TYPE_L_P ] = ARP_HARDWARE_TYPE_L_V;
-	
+
 	// setup protocol type to ip 0x0800
 	rxtx_buffer[ ARP_PROTOCOL_H_P ] = ARP_PROTOCOL_H_V;
 	rxtx_buffer[ ARP_PROTOCOL_L_P ] = ARP_PROTOCOL_L_V;
@@ -99,7 +99,7 @@ void arp_generate_packet ( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned cha
 		rxtx_buffer[ ARP_DST_MAC_P + i ] = dest_mac[i];
 		rxtx_buffer[ ARP_SRC_MAC_P + i ] = avr_mac[i];
 	}
-	
+
 	// setup arp destination and source ip address
 	for ( i=0; i<sizeof(IP_ADDR); i++)
 	{
@@ -126,12 +126,12 @@ void arp_send_request ( BYTE *rxtx_buffer, const unsigned char *dest_ip )
 	// generate arp packet
 	for ( i=0; i<sizeof(MAC_ADDR); i++)
 		dest_mac.byte[i] = 0x00;
-	
+
 	// set arp opcode is request
 	rxtx_buffer[ ARP_OPCODE_H_P ] = ARP_OPCODE_REQUEST_H_V;
 	rxtx_buffer[ ARP_OPCODE_L_P ] = ARP_OPCODE_REQUEST_L_V;
 	arp_generate_packet ( rxtx_buffer, (BYTE*)&dest_mac, dest_ip );
-	
+
 	// send arp packet to network
 	enc28j60_packet_send ( rxtx_buffer, sizeof(ETH_HEADER) + sizeof(ARP_PACKET) );
 }
@@ -155,7 +155,7 @@ BYTE arp_packet_is_arp(BYTE *rxtx_buffer, unsigned short opcode)
   // if destination ip address in arp packet not match with avr ip address
   unsigned char i;
 	for ( i=0; i<4; i++ )
-	{ 
+	{
 		if ( rxtx_buffer[ ARP_DST_IP_P + i] != avr_ip[i] ){
 		 return 0;
     }
@@ -177,7 +177,7 @@ void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac )
 	rxtx_buffer[ ARP_OPCODE_H_P ] = ARP_OPCODE_REPLY_H_V;
 	rxtx_buffer[ ARP_OPCODE_L_P ] = ARP_OPCODE_REPLY_L_V;
 	arp_generate_packet ( rxtx_buffer, dest_mac, &rxtx_buffer[ ARP_SRC_IP_P ] );
-	
+
 	// send arp packet
 	enc28j60_packet_send ( rxtx_buffer, sizeof(ETH_HEADER) + sizeof(ARP_PACKET) );
 }
@@ -189,10 +189,10 @@ void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac )
 // call this function to find the destination mac address before send other packet.
 //
 //*******************************************************************************************
-unsigned char arpWhoIs (unsigned char *rxtx_buffer, const unsigned char *dest_ip, unsigned char *dest_mac){
+unsigned char ArpWhoIs (unsigned char *rxtx_buffer, const unsigned char *dest_ip, unsigned char *dest_mac){
  unsigned short dlength;
  unsigned short waiting = 0;
- 
+
  arp_send_request(rxtx_buffer, dest_ip );
  dlength = ethWaitPacket(rxtx_buffer, ETH_TYPE_ARP_V, &waiting, 100);
  if(dlength != 0){

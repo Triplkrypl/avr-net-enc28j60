@@ -24,6 +24,7 @@
 // http://www.gnu.de/gpl-ger.html
 //
 //********************************************************************************************
+#include "arp.h"
 #include "tcp.h"
 #include "ip.h"
 #include "ethernet.h"
@@ -57,7 +58,6 @@
 
 // global variables ***********************************************************************
 TcpConnection tcp_connections[TCP_MAX_CONNECTIONS];
-//static DWORD_BYTES tcp_sequence_number;
 
 void TcpInit(){
  unsigned char i;
@@ -94,25 +94,24 @@ BYTE tcp_get_hlength ( BYTE *rxtx_buffer )
 {
 	return ((rxtx_buffer[ TCP_HEADER_LEN_P ]>>4) * 4); // generate len in bytes;
 }
-// todo prepsat s vyzadanou dylkou
+
 //********************************************************************************************
 //
-// Function : tcp_puts_data
+// Function : TcpPutsData
 // Description : puts data from RAM to tx buffer
 //
 //********************************************************************************************
-WORD tcp_puts_data ( BYTE *rxtx_buffer, BYTE *data, WORD offset )
-{
-	while( *data )
-	{
-		rxtx_buffer[ TCP_DATA_P + offset ] = *data++;
-		offset++;
-	}
-
-	return offset;
+// todo mozna vyhodit
+unsigned short TcpPutsData(unsigned char *rxtx_buffer, unsigned char *data, unsigned short dataLength, unsigned short offset){
+ unsigned short i;
+ for(i=0; i<dataLength; i++){
+  rxtx_buffer[TCP_DATA_P + offset] = data[i];
+  offset++;
+ }
+ return offset;
 }
 
-// todo prejmenovat a mozna static
+// todo prejmenovat a mozna static a mozna inline
 void tcp_get_sequence(unsigned char *buffer, unsigned long *seq, unsigned long *ack){
  ((unsigned char*)seq)[0] = buffer[TCP_SEQ_P + 3];
  ((unsigned char*)seq)[1] = buffer[TCP_SEQ_P + 2];
@@ -145,18 +144,18 @@ static inline void TcpSetPort(unsigned char *buffer, const unsigned short destin
  buffer[TCP_SRC_PORT_L_P] = *((unsigned char*)&source);
 }
 
+// todo refactor drobnej
 //********************************************************************************************
 //
 // Function : TcpSendPacket
 // Description : send tcp packet to network.
 //
 //********************************************************************************************
-static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connection, unsigned char flags, unsigned short dlength, unsigned char *dest_mac){
-	BYTE i, tseq;
+static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connection, unsigned char flags, unsigned short dlength){
+	BYTE tseq;
 	WORD_BYTES ck;
 
-	// generate ethernet header
-	eth_generate_header ( rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, dest_mac );
+	eth_generate_header( rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, connection.mac);
 
 	// initial tcp sequence number
 	// setup maximum segment size
@@ -178,9 +177,9 @@ static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connec
 		rxtx_buffer[ TCP_HEADER_LEN_P ] = 0x50;
   //}
 
-	ip_generate_header(rxtx_buffer, (WORD_BYTES){(sizeof(IP_HEADER) + sizeof(TCP_HEADER) + dlength)}, IP_PROTO_TCP_V, connection.ip);
-	TcpSetSequence(rxtx_buffer, connection.sendSequence, connection.expectedSequence);
-    TcpSetPort(rxtx_buffer, connection.dest_port, connection.src_port);
+ ip_generate_header(rxtx_buffer, (WORD_BYTES){(sizeof(IP_HEADER) + sizeof(TCP_HEADER) + dlength)}, IP_PROTO_TCP_V, connection.ip);
+ TcpSetSequence(rxtx_buffer, connection.sendSequence, connection.expectedSequence);
+ TcpSetPort(rxtx_buffer, connection.remotePort, connection.port);
 
 	// setup tcp flags
 	rxtx_buffer [ TCP_FLAGS_P ] = flags;
@@ -211,203 +210,25 @@ static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connec
 	// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 	// +           0           +      IP Protocol      +                    Total length               +
 	// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-	ck.word = software_checksum( &rxtx_buffer[IP_SRC_IP_P], sizeof(TCP_HEADER)+dlength+8, IP_PROTO_TCP_V + sizeof(TCP_HEADER) + dlength );
+	ck.word = software_checksum(rxtx_buffer + IP_SRC_IP_P, sizeof(TCP_HEADER)+dlength+8, IP_PROTO_TCP_V + sizeof(TCP_HEADER) + dlength );
 	rxtx_buffer[ TCP_CHECKSUM_H_P ] = ck.byte.high;
 	rxtx_buffer[ TCP_CHECKSUM_L_P ] = ck.byte.low;
 
-	// send packet to ethernet media
-	enc28j60_packet_send ( rxtx_buffer, sizeof(ETH_HEADER)+sizeof(IP_HEADER)+sizeof(TCP_HEADER)+dlength );
+ // send packet to ethernet media
+ enc28j60_packet_send(rxtx_buffer, sizeof(ETH_HEADER)+sizeof(IP_HEADER)+sizeof(TCP_HEADER)+dlength);
 }
-// toto uvidome jetsli jejeste potreba mozna jo (refactor)
-unsigned char tcp_send_ack(unsigned char *buffer, unsigned long sequence, unsigned short dataLength, TcpConnection *conection, unsigned char *dest_mac){
+// toto refactor
+unsigned char TcpSendAck(unsigned char *buffer, unsigned long sequence, unsigned short dataLength, TcpConnection *conection){
  unsigned char expectedData = sequence == conection->expectedSequence;
  if(expectedData){
   conection->expectedSequence += dataLength;
  }
- TcpSendPacket(buffer, *conection, TCP_FLAG_ACK_V, 0, dest_mac);
+ TcpSendPacket(buffer, *conection, TCP_FLAG_ACK_V, 0);
  return expectedData;
 }
 
-inline unsigned char TcpIsConnection(const TcpConnection connection, const unsigned char ip[4], const unsigned short destPort, const unsigned short srcPort){
- return connection.src_port == srcPort && connection.dest_port == destPort && memcmp(connection.ip, ip, 4) == 0 && connection.state != TCP_STATE_NO_CONNECTION;
-}
 
-static unsigned char TcpGetConnectionId(unsigned char ip[4], unsigned short destPort, unsigned short srcPort, unsigned char firstPacket){
- unsigned char i, empty = TCP_INVALID_CONNECTION_ID;
- for(i=0;i<TCP_MAX_CONNECTIONS; i++){
-  if(TcpIsConnection(tcp_connections[i], ip, destPort, srcPort)){
-   return i;
-  }
-  if(tcp_connections[i].state == TCP_STATE_NO_CONNECTION){
-   empty = i;
-  }
- }
- if(empty == TCP_INVALID_CONNECTION_ID || ! firstPacket){
-  return TCP_INVALID_CONNECTION_ID;
- }
- tcp_connections[empty].state = TCP_STATE_NEW;
- tcp_connections[empty].dest_port = destPort;
- tcp_connections[empty].src_port = srcPort;
- memcpy(tcp_connections[empty].ip, ip, 4);
- return empty;
-}
-
-// todo komentar na ack 0
-static unsigned char tcp_wait_packet(unsigned char *buffer, TcpConnection *connection, unsigned short *waiting, unsigned short timeout, unsigned short sendedDataLength, unsigned char expectedFlag){
- unsigned short length;
- unsigned short src_port;
- unsigned long ack_packet_seq;
- unsigned long ack_packet_ack;
-
- length = ethWaitPacket(buffer, ETH_TYPE_IP_V, waiting, timeout);
- if(length != 0){
-  if(ip_packet_is_ip(buffer) && tcp_is_tcp(buffer, connection->dest_port, &src_port)){
-   unsigned char srcMac[6];
-   unsigned short tcp_length = tcp_get_dlength(buffer);
-   memcpy(srcMac, buffer + ETH_SRC_MAC_P, 6);
-   tcp_get_sequence(buffer, &ack_packet_seq, &ack_packet_ack);
-   if(
-    TcpIsConnection(*connection, buffer + IP_SRC_IP_P, connection->dest_port, src_port) &&
-    ((buffer[ TCP_FLAGS_P ] & expectedFlag) || expectedFlag == 0) &&
-    (tcp_length != 0 || expectedFlag != 0) &&
-    connection->expectedSequence == ack_packet_seq &&
-    (connection->sendSequence + sendedDataLength) == ack_packet_ack
-   ){
-    connection->sendSequence = ack_packet_ack;
-    if(tcp_length != 0 && expectedFlag != 0) {
-     tcp_handle_incoming_packet(buffer, length, srcMac, connection->ip, src_port, connection->dest_port);
-    }
-    return 1;
-   }else{
-    tcp_handle_incoming_packet(buffer, length, srcMac, connection->ip, src_port, connection->dest_port);
-   }
-  }else{
-   NetHandleIncomingPacket(buffer, length);
-  }
- }
- return 0;
-}
-
-
-
-
-
-TcpConnection tcp_connect(unsigned char *buffer, unsigned char *desIp, unsigned short destPort, unsigned short timeout){
- TcpConnection connection;
- // todo dodelat
-}
-
-static unsigned char tcp_close(unsigned char *buffer, TcpConnection *connection, unsigned char *destMac, unsigned short timeout){
- if(connection->state != TCP_STATE_DYEING){
-  return 0;
- }
- unsigned short waiting = 0;
- for(;;){
-  TcpSendPacket(buffer, *connection, TCP_FLAG_FIN_V, 0, destMac);
-  if(tcp_wait_packet(buffer, connection, &waiting, 300, 1, TCP_FLAG_ACK_V)){
-   return 1;
-  }
-  waiting += 300;
-  if(waiting > timeout){
-   break;
-  }
- }
- return 1;
-}
-
-unsigned char tcp_send_data(unsigned char *buffer, TcpConnection *connection, unsigned char *destMac, unsigned short timeout, unsigned char *data, unsigned short dataLength){
- if(connection->state != TCP_STATE_ESTABLISHED){
-  return 0;
- }
- unsigned short waiting = 0;
- for(;;){
-  tcp_puts_data(buffer, data, 0);
-  TcpSendPacket(buffer, *connection, TCP_FLAG_ACK_V, dataLength, destMac);
-  if(tcp_wait_packet(buffer, connection, &waiting, 300, dataLength, TCP_FLAG_ACK_V)){
-   return 1;
-  }
-  waiting += 300;
-  if(waiting > timeout){
-   break;
-  }
- }
- return 0;
-}
-// todo comment dark magic
-void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, unsigned char srcMac[], unsigned char srcIp[], unsigned short srcPort, unsigned short destPort){
- unsigned char conID = TcpGetConnectionId(srcIp, destPort, srcPort, buffer[TCP_FLAGS_P] & TCP_FLAG_SYN_V);
- if(conID == TCP_INVALID_CONNECTION_ID){
-  return;
- }
- unsigned long seq;
- unsigned long ack;
- tcp_get_sequence(buffer, &seq, &ack);
- unsigned short data_length = tcp_get_dlength(buffer);
- char out[100];
- sprintf(out, "Id conID %u state %u\n", conID, tcp_connections[conID].state);
- UARTWriteChars(out);
- sprintf(out, "Sec %u\n", seq);
- UARTWriteChars(out);
- sprintf(out, "Ack %u\n", ack);
- UARTWriteChars(out);
- sprintf(out, "Sec conection %u\n", tcp_connections[conID].sendSequence);
- UARTWriteChars(out);
- sprintf(out, "Expected Sec conection %u\n", tcp_connections[conID].expectedSequence);
- UARTWriteChars(out);
- sprintf(out, "Delka dat %u\n", data_length);
- UARTWriteChars(out);
- if((buffer[ TCP_FLAGS_P ] & TCP_FLAG_SYN_V) && (tcp_connections[conID].state == TCP_STATE_NEW || tcp_connections[conID].state == TCP_STATE_SYN_RECEIVED)){
-  tcp_connections[conID].state = TCP_STATE_SYN_RECEIVED;
-  tcp_connections[conID].expectedSequence = seq + 1;
-  tcp_connections[conID].sendSequence = 2;
-  sprintf(out, "SYN packet\n");
-  UARTWriteChars(out);
-  TcpSendPacket(buffer, tcp_connections[conID], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0, srcMac);
-  return;
- }
- if(tcp_connections[conID].expectedSequence != seq){
-  return;
- }
- if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && tcp_connections[conID].state == TCP_STATE_SYN_RECEIVED){
-  // pridani callbacku nove spojeni
-  sprintf(out, "Established packet\n");
-  UARTWriteChars(out);
-  tcp_connections[conID].state = TCP_STATE_ESTABLISHED;
-  tcp_connections[conID].sendSequence = ack;
- }
- if((buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && (tcp_connections[conID].state == TCP_STATE_ESTABLISHED || tcp_connections[conID].state == TCP_STATE_DYEING)){
-  tcp_send_ack(buffer, seq, 1, tcp_connections + conID, srcMac);
-  sprintf(out, "Zadost o konec \n");
-  UARTWriteChars(out);
-  if(tcp_connections[conID].state == TCP_STATE_ESTABLISHED){
-   tcp_connections[conID].state = TCP_STATE_DYEING;
-   // pridat callback na ukoncene spojeni
-   tcp_close(buffer, tcp_connections + conID, srcMac, 900);
-   tcp_connections[conID].state = TCP_STATE_NO_CONNECTION;
-   sprintf(out, "Konec\n");
-   UARTWriteChars(out);
-  }
- }
- if(tcp_connections[conID].state != TCP_STATE_ESTABLISHED){
-  return;
- }
- if(data_length == 0){
-  return;
- }
- if(!tcp_send_ack(buffer, seq, data_length, tcp_connections + conID, srcMac)){
-  return;
- }
- // pridani callbacku na prichozi data
- UARTWriteChars("Prichozi data '");
- UARTWriteCharsLength(buffer + TCP_SRC_PORT_H_P + tcp_get_hlength(buffer), data_length);
- UARTWriteChars("'\n");
-
- if(tcp_send_data(buffer, tcp_connections + conID, srcMac, 5000, buffer + TCP_SRC_PORT_H_P + tcp_get_hlength(buffer), data_length)){
-  UARTWriteChars("Odchozi data OK\n");
- }
- return;
-}
-
+// todo rozdelit zsikani portu a kontrolu tcp
 unsigned char tcp_is_tcp(unsigned char *rxtx_buffer, unsigned short dest_port, unsigned short* src_port){
  if(rxtx_buffer[IP_PROTO_P] != IP_PROTO_TCP_V){
   return 0;
@@ -421,4 +242,246 @@ unsigned char tcp_is_tcp(unsigned char *rxtx_buffer, unsigned short dest_port, u
  *((unsigned char*)src_port) = rxtx_buffer[TCP_SRC_PORT_L_P];
 
  return 1;
+}
+
+static inline unsigned char TcpIsConnection(const TcpConnection connection, unsigned char mac[MAC_ADDRESS_SIZE], const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short remotePort){
+ return
+  connection.state != TCP_STATE_NO_CONNECTION &&
+  connection.port == port &&
+  connection.remotePort == remotePort &&
+  memcmp(connection.ip, ip, IP_V4_ADDRESS_SIZE) == 0 &&
+  memcmp(connection.mac, mac, MAC_ADDRESS_SIZE) == 0
+ ;
+}
+
+static unsigned char TcpGetConnectionId(unsigned char mac[6], unsigned char ip[4], unsigned short destPort, unsigned short srcPort, unsigned char firstPacket){
+ unsigned char i;
+ for(i=0;i<TCP_MAX_CONNECTIONS; i++){
+  if(TcpIsConnection(tcp_connections[i], mac, ip, destPort, srcPort)){
+   return i;
+  }
+ }
+ if(!firstPacket){
+  return TCP_INVALID_CONNECTION_ID;
+ }
+ i = TcpGetEmptyConenctionId();
+ if(i == TCP_INVALID_CONNECTION_ID){
+  return TCP_INVALID_CONNECTION_ID;
+ }
+ tcp_connections[i].state = TCP_STATE_NEW;
+ tcp_connections[i].port = destPort;
+ tcp_connections[i].remotePort = srcPort;
+ memcpy(tcp_connections[i].mac, mac, MAC_ADDRESS_SIZE);
+ memcpy(tcp_connections[i].ip, ip, IP_V4_ADDRESS_SIZE);
+ return i;
+}
+
+// todo komentar na ack 0 refactor
+static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connection, unsigned short *waiting, unsigned short timeout, unsigned short sendedDataLength, unsigned char expectedFlag){
+ unsigned short length;
+ unsigned short srcPort;
+ unsigned long ack_packet_seq;
+ unsigned long ack_packet_ack;
+ length = ethWaitPacket(buffer, ETH_TYPE_IP_V, waiting, timeout);
+ if(length != 0){
+  if(ip_packet_is_ip(buffer) && tcp_is_tcp(buffer, connection->port, &srcPort)){
+   unsigned char srcMac[6];
+   unsigned short tcp_length = tcp_get_dlength(buffer);
+   memcpy(srcMac, buffer + ETH_SRC_MAC_P, 6);
+   tcp_get_sequence(buffer, &ack_packet_seq, &ack_packet_ack);
+   if(
+    TcpIsConnection(*connection, buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, connection->port, srcPort) &&
+    ((buffer[ TCP_FLAGS_P ] & expectedFlag) || expectedFlag == 0) &&
+    (tcp_length != 0 || expectedFlag != 0) &&// todo asi silenost
+    ((connection->expectedSequence == ack_packet_seq) || (expectedFlag & TCP_FLAG_SYN_V)) &&
+    (connection->sendSequence + sendedDataLength) == ack_packet_ack
+   ){
+    if(expectedFlag & TCP_FLAG_SYN_V){
+     connection->expectedSequence = ack_packet_seq;
+    }
+    connection->sendSequence = ack_packet_ack;
+    if(tcp_length != 0 && expectedFlag != 0) {
+     tcp_handle_incoming_packet(buffer, length, srcMac, connection->ip, srcPort, connection->remotePort);
+    }
+    return 1;
+   }else{
+    tcp_handle_incoming_packet(buffer, length, srcMac, connection->ip, srcPort, connection->remotePort);
+   }
+  }else{
+   NetHandleIncomingPacket(buffer, length);
+  }
+ }
+ return 0;
+}
+
+//********************************************************************************************
+//
+// Function : TcpGetEmptyConenctionId
+// Description : get empty id for new asynchronous connection
+//
+//********************************************************************************************
+unsigned char TcpGetEmptyConenctionId(){
+ unsigned char i;
+ for(i=0; i<TCP_MAX_CONNECTIONS; i++){
+  if(tcp_connections[i].state == TCP_STATE_NO_CONNECTION){
+   return i;
+  }
+ }
+ return TCP_INVALID_CONNECTION_ID;
+}
+
+// todo mozna jiny nazvi pormynch na vstupu
+//********************************************************************************************
+//
+// Function : TcpConnect
+// Description : active creation connection to server
+//
+//********************************************************************************************
+void TcpConnect(unsigned char *buffer, TcpConnection *connection, const unsigned char *desIp, const unsigned short destPort, const unsigned short srcPort, const unsigned short timeout){
+ memcpy(connection->ip, desIp, 4);
+ connection->port = srcPort;
+ connection->remotePort = destPort;
+ connection->sendSequence = 2;
+ connection->expectedSequence = 0;
+ connection->state = TCP_STATE_NEW;
+ if(!ArpWhoIs(buffer, desIp, connection->mac)){
+  connection->state = TCP_STATE_NO_CONNECTION;
+  return;
+ }
+ unsigned short waiting = 0;
+ for(;;){
+  TcpSendPacket(buffer, *connection, TCP_FLAG_SYN_V, 0);
+  if(TcpWaitPacket(buffer, connection, &waiting, 300, 1, TCP_FLAG_SYN_V | TCP_FLAG_ACK_V)){
+   TcpSendAck(buffer, connection->expectedSequence, 1, connection);
+   connection->state = TCP_STATE_ESTABLISHED;
+   return;
+  }
+  waiting += 300;
+  if(waiting > timeout){
+   break;
+  }
+ }
+ connection->state = TCP_STATE_NO_CONNECTION;
+}
+
+unsigned char TcpSendData(unsigned char *buffer, TcpConnection *connection, unsigned short timeout, unsigned char *data, unsigned short dataLength){
+ if(connection->state != TCP_STATE_ESTABLISHED){
+  return 0;
+ }
+ unsigned short waiting = 0;
+ for(;;){
+  TcpPutsData(buffer, data, dataLength, 0);
+  TcpSendPacket(buffer, *connection, TCP_FLAG_ACK_V, dataLength);
+  if(TcpWaitPacket(buffer, connection, &waiting, 300, dataLength, TCP_FLAG_ACK_V)){
+   return 1;
+  }
+  waiting += 300;
+  if(waiting > timeout){
+   break;
+  }
+ }
+ return 0;
+}
+
+static unsigned char TcpClose(unsigned char *buffer, TcpConnection *connection, unsigned short timeout){
+ if(connection->state != TCP_STATE_DYEING){
+  return 0;
+ }
+ unsigned short waiting = 0;
+ for(;;){
+  TcpSendPacket(buffer, *connection, TCP_FLAG_FIN_V, 0);
+  if(TcpWaitPacket(buffer, connection, &waiting, 300, 1, TCP_FLAG_ACK_V)){
+   return 1;
+  }
+  waiting += 300;
+  if(waiting > timeout){
+   break;
+  }
+ }
+ return 1;
+}
+
+// todo comment dark magic refactor
+void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, unsigned char srcMac[MAC_ADDRESS_SIZE], unsigned char srcIp[IP_V4_ADDRESS_SIZE], unsigned short srcPort, unsigned short destPort){
+ unsigned char conID = TcpGetConnectionId(srcMac, srcIp, destPort, srcPort, buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V);
+ if(conID == TCP_INVALID_CONNECTION_ID){
+  return;
+ }
+ unsigned long seq;
+ unsigned long ack;
+ tcp_get_sequence(buffer, &seq, &ack);
+ unsigned short data_length = tcp_get_dlength(buffer);
+ char out[100];
+ sprintf(out, "Id conID %u state %u port %u remote port %u\n", conID, tcp_connections[conID].state, tcp_connections[conID].port, tcp_connections[conID].remotePort);
+ UARTWriteChars(out);
+ sprintf(out, "Sec %lu\n", seq);
+ UARTWriteChars(out);
+ sprintf(out, "Ack %lu\n", ack);
+ UARTWriteChars(out);
+ sprintf(out, "Sec conection %lu\n", tcp_connections[conID].sendSequence);
+ UARTWriteChars(out);
+ sprintf(out, "Expected Sec conection %lu\n", tcp_connections[conID].expectedSequence);
+ UARTWriteChars(out);
+ sprintf(out, "Delka dat %u\n", data_length);
+ UARTWriteChars(out);
+ if((buffer[ TCP_FLAGS_P ] == TCP_FLAG_SYN_V) && (tcp_connections[conID].state == TCP_STATE_NEW || tcp_connections[conID].state == TCP_STATE_SYN_RECEIVED)){
+  tcp_connections[conID].state = TCP_STATE_SYN_RECEIVED;
+  tcp_connections[conID].expectedSequence = seq + 1;
+  tcp_connections[conID].sendSequence = 2;
+  sprintf(out, "SYN packet\n");
+  UARTWriteChars(out);
+  TcpSendPacket(buffer, tcp_connections[conID], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
+  return;
+ }
+ if(tcp_connections[conID].expectedSequence != seq){
+  return;
+ }
+ if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && tcp_connections[conID].state == TCP_STATE_SYN_RECEIVED){
+  // pridani callbacku nove spojeni
+  sprintf(out, "Established packet\n");
+  UARTWriteChars(out);
+  tcp_connections[conID].state = TCP_STATE_ESTABLISHED;
+  tcp_connections[conID].sendSequence = ack;
+ }
+ if((buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && (tcp_connections[conID].state == TCP_STATE_ESTABLISHED || tcp_connections[conID].state == TCP_STATE_DYEING)){
+  TcpSendAck(buffer, seq, 1, tcp_connections + conID);
+  sprintf(out, "Zadost o konec \n");
+  UARTWriteChars(out);
+  if(tcp_connections[conID].state == TCP_STATE_ESTABLISHED){
+   tcp_connections[conID].state = TCP_STATE_DYEING;
+   // pridat callback na ukoncene spojeni
+   TcpClose(buffer, tcp_connections + conID, 900);
+   tcp_connections[conID].state = TCP_STATE_NO_CONNECTION;// mozna presunout do close
+   sprintf(out, "Konec\n");
+   UARTWriteChars(out);
+  }
+ }
+ if(tcp_connections[conID].state != TCP_STATE_ESTABLISHED){
+  return;
+ }
+ if(data_length == 0){
+  return;
+ }
+ if(!TcpSendAck(buffer, seq, data_length, tcp_connections + conID)){
+  return;
+ }
+ // pridani callbacku na prichozi data
+ UARTWriteChars("Prichozi data '");
+ UARTWriteCharsLength(buffer + TCP_SRC_PORT_H_P + tcp_get_hlength(buffer), data_length);
+ UARTWriteChars("'\n");
+
+ unsigned char data[50];
+ memcpy(data, buffer + TCP_SRC_PORT_H_P + tcp_get_hlength(buffer), data_length);
+
+ unsigned char testConnectionId = TcpGetEmptyConenctionId();
+ if(testConnectionId == TCP_INVALID_CONNECTION_ID){
+  return;
+ }
+ unsigned char testConnectIp[IP_V4_ADDRESS_SIZE] = {192, 168, 0, 30};
+ TcpConnect(buffer, tcp_connections + testConnectionId, testConnectIp, 800, 7050, 2000);
+
+ if(TcpSendData(buffer, tcp_connections + testConnectionId, 5000, data, data_length)){
+  UARTWriteChars("Odchozi data OK\n");
+ }
+ return;
 }

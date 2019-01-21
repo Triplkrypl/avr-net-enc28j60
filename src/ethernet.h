@@ -49,10 +49,8 @@
 //
 //********************************************************************************************
 //void eth_generate_packet ( ETH_HEADER eth_header );
-extern WORD software_checksum( BYTE *rxtx_buffer, WORD len, DWORD sum);
-extern void eth_generate_header ( BYTE *rxtx_buffer, WORD_BYTES type, BYTE *dest_mac );
-extern unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type);
-extern unsigned char ethWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short *waiting, unsigned short timeout);
-extern unsigned char ethPacketForMe(unsigned char *rxtx_buffer);
-
+WORD software_checksum( BYTE *rxtx_buffer, WORD len, DWORD sum);// refactor
+void eth_generate_header ( BYTE *rxtx_buffer, const WORD_BYTES type, const unsigned char destMac[MAC_ADDRESS_SIZE]);
+unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type);
+unsigned char ethWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short *waiting, unsigned short timeout);
 #endif

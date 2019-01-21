@@ -26,23 +26,24 @@
 //********************************************************************************************
 #include "ethernet.h"
 #include "net.c"
+#include <string.h>
 //********************************************************************************************
 //
-// Ethernet is a large, diverse family of frame-based computer networking technologies 
-// that operates at many speeds for local area networks (LANs). 
-// The name comes from the physical concept of the ether. 
-// It defines a number of wiring and signaling standards for the physical layer, 
-// through means of network access at the Media Access Control (MAC)/Data Link Layer, 
+// Ethernet is a large, diverse family of frame-based computer networking technologies
+// that operates at many speeds for local area networks (LANs).
+// The name comes from the physical concept of the ether.
+// It defines a number of wiring and signaling standards for the physical layer,
+// through means of network access at the Media Access Control (MAC)/Data Link Layer,
 // and a common addressing format.
 //
-// Ethernet has been standardized as IEEE 802.3. 
-// The combination of the twisted pair versions of ethernet for connecting end systems to 
-// the network with the fiber optic versions for site backbones 
-// become the most widespread wired LAN technology in use from the 1990s to the present, 
-// largely replacing competing LAN standards such as coaxial cable Ethernet, 
-// token ring, FDDI, and ARCNET. In recent years, Wi-Fi, 
-// the wireless LAN standardized by IEEE 802.11, 
-// has been used instead of Ethernet for many home and small office networks 
+// Ethernet has been standardized as IEEE 802.3.
+// The combination of the twisted pair versions of ethernet for connecting end systems to
+// the network with the fiber optic versions for site backbones
+// become the most widespread wired LAN technology in use from the 1990s to the present,
+// largely replacing competing LAN standards such as coaxial cable Ethernet,
+// token ring, FDDI, and ARCNET. In recent years, Wi-Fi,
+// the wireless LAN standardized by IEEE 802.11,
+// has been used instead of Ethernet for many home and small office networks
 // and in addition to Ethernet in larger installations.
 //
 //
@@ -54,22 +55,18 @@
 // ethernet type.
 //
 //********************************************************************************************
-void eth_generate_header ( BYTE *rxtx_buffer, WORD_BYTES type, BYTE *dest_mac )
-{
-	BYTE i;
-	//copy the destination mac from the source and fill my mac into src
-	for ( i=0; i<sizeof(MAC_ADDR); i++)
-	{
-		rxtx_buffer[ ETH_DST_MAC_P + i ] = dest_mac[i];
-		rxtx_buffer[ ETH_SRC_MAC_P + i ] = avr_mac[i];
-	}
-	rxtx_buffer[ ETH_TYPE_H_P ] = type.byte.high;//HIGH(type);
-	rxtx_buffer[ ETH_TYPE_L_P ] = type.byte.low;//LOW(type);
+void eth_generate_header(BYTE *rxtx_buffer, const WORD_BYTES type, const unsigned char destMac[MAC_ADDRESS_SIZE]){
+ //copy the destination mac from the source and fill my mac into src
+ memcpy(rxtx_buffer + ETH_DST_MAC_P, destMac, MAC_ADDRESS_SIZE);
+ memcpy(rxtx_buffer + ETH_SRC_MAC_P, avr_mac, MAC_ADDRESS_SIZE);
+
+ rxtx_buffer[ ETH_TYPE_H_P ] = type.byte.high;//HIGH(type);
+ rxtx_buffer[ ETH_TYPE_L_P ] = type.byte.low;//LOW(type);
 }
 //********************************************************************************************
 //
 // Function : software_checksum
-// Description : 
+// Description :
 // The Ip checksum is calculated over the ip header only starting
 // with the header length field and a total length of 20 bytes
 // unitl ip.dst
@@ -77,7 +74,7 @@ void eth_generate_header ( BYTE *rxtx_buffer, WORD_BYTES type, BYTE *dest_mac )
 // the calculation.
 // len for ip is 20.
 //
-// For UDP/TCP we do not make up the required pseudo header. Instead we 
+// For UDP/TCP we do not make up the required pseudo header. Instead we
 // use the ip.src and ip.dst fields of the real packet:
 // The udp checksum calculation starts with the ip.src field
 // Ip.src=4bytes,Ip.dst=4 bytes,Udp header=8bytes + data length=16+len
@@ -122,17 +119,7 @@ unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type){
  return ( rxtx_buffer[ ETH_TYPE_H_P ] == high(type) && rxtx_buffer[ ETH_TYPE_L_P ] == low(type));
 }
 
-unsigned char ethPacketForMe(unsigned char *rxtx_buffer){
- unsigned char i;
- for(i=0; i<6; i++){
-  if(rxtx_buffer[ETH_DST_MAC_P + i] != avr_mac[i]){
-   return 0;
-  }
- }
- return 1;
-}
-
-// toto pridat komentar pro timeout
+// toto pridat komentar pro timeout, premenovat
 unsigned char ethWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short *waiting, unsigned short timeout){
  unsigned short length;
  unsigned char microWaiting = 0;
@@ -140,8 +127,8 @@ unsigned char ethWaitPacket(unsigned char *rxtx_buffer, unsigned short type, uns
   _delay_us(100);
   length = enc28j60_packet_receive(rxtx_buffer, 400);// todo nastavit velikost bufferu konstantou
   if(length != 0){
-   if(ethCheckType(rxtx_buffer, type) && ethPacketForMe(rxtx_buffer)){
-	   return length;
+   if(ethCheckType(rxtx_buffer, type) && memcmp(rxtx_buffer + ETH_DST_MAC_P, avr_mac, MAC_ADDRESS_SIZE) == 0){
+    return length;
    }
    NetHandleIncomingPacket(rxtx_buffer, length);
   }

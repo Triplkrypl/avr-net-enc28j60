@@ -70,9 +70,10 @@
 typedef struct TcpConnection{
  unsigned long sendSequence;
  unsigned long expectedSequence;
- unsigned short src_port;
- unsigned short dest_port;
- unsigned char ip[4];
+ unsigned short port;
+ unsigned short remotePort;
+ unsigned char ip[IP_V4_ADDRESS_SIZE];
+ unsigned char mac[MAC_ADDRESS_SIZE];
  unsigned char state;
 } TcpConnection;
 
@@ -86,9 +87,10 @@ WORD tcp_get_dlength( BYTE *rxtx_buffer );
 BYTE tcp_get_hlength( BYTE *rxtx_buffer );
 WORD tcp_puts_data( BYTE *rxtx_buffer, BYTE *data, WORD offset );
 unsigned char tcp_is_tcp(unsigned char *rxtx_buffer, unsigned short dest_port, unsigned short* src_port);
-unsigned char tcp_send_ack(unsigned char *buffer, unsigned long sequence, unsigned short dataLength, TcpConnection *conenction, unsigned char *dest_mac);
+unsigned char TcpSendAck(unsigned char *buffer, unsigned long sequence, unsigned short dataLength, TcpConnection *conenction);// todo je to potreba mit z venci
 void tcp_get_sequence(unsigned char *buffer, unsigned long *seq, unsigned long *ack);
-TcpConnection tcp_connect(unsigned char *buffer, unsigned char *desIp, unsigned short destPort, unsigned short timeout);
-unsigned char tcp_send_data(unsigned char *buffer, TcpConnection *conection, unsigned char *destMac, unsigned short timeout, unsigned char *data, unsigned short dataLength);
+void TcpConnect(unsigned char *buffer, TcpConnection *connection, const unsigned char *desIp, const unsigned short destPort, const unsigned short srcPort, const unsigned short timeout);
+unsigned char TcpGetEmptyConenctionId();
+unsigned char TcpSendData(unsigned char *buffer, TcpConnection *conection, unsigned short timeout, unsigned char *data, unsigned short dataLength);
 void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, unsigned char srcMac[], unsigned char srcIp[], unsigned short srcPort, unsigned short destPort);
 #endif
