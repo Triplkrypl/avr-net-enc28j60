@@ -51,6 +51,6 @@
 //void eth_generate_packet ( ETH_HEADER eth_header );
 WORD software_checksum( BYTE *rxtx_buffer, WORD len, DWORD sum);// refactor
 void eth_generate_header ( BYTE *rxtx_buffer, const WORD_BYTES type, const unsigned char destMac[MAC_ADDRESS_SIZE]);
-unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type);
-unsigned char ethWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short *waiting, unsigned short timeout);
+unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type);// todo refactor
+unsigned char EthWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short timeout);
 #endif

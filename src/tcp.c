@@ -65,6 +65,10 @@ void TcpInit(){
   tcp_connections[i].state = TCP_STATE_NO_CONNECTION;
  }
 }
+
+static inline unsigned short TcpGetDataPosition(unsigned char *buffer){
+ return TCP_SRC_PORT_H_P + tcp_get_hlength(buffer);
+}
 //*****************************************************************************************
 //
 // Function : tcp_get_dlength
@@ -102,7 +106,7 @@ BYTE tcp_get_hlength ( BYTE *rxtx_buffer )
 //
 //********************************************************************************************
 // todo mozna vyhodit
-unsigned short TcpPutsData(unsigned char *rxtx_buffer, unsigned char *data, unsigned short dataLength, unsigned short offset){
+unsigned short TcpPutsData(unsigned char *rxtx_buffer, const unsigned char *data, const unsigned short dataLength, unsigned short offset){
  unsigned short i;
  for(i=0; i<dataLength; i++){
   rxtx_buffer[TCP_DATA_P + offset] = data[i];
@@ -111,8 +115,8 @@ unsigned short TcpPutsData(unsigned char *rxtx_buffer, unsigned char *data, unsi
  return offset;
 }
 
-// todo prejmenovat a mozna static a mozna inline
-void tcp_get_sequence(unsigned char *buffer, unsigned long *seq, unsigned long *ack){
+// todo mozna inline
+static void TcpGetSequence(unsigned char *buffer, unsigned long *seq, unsigned long *ack){
  ((unsigned char*)seq)[0] = buffer[TCP_SEQ_P + 3];
  ((unsigned char*)seq)[1] = buffer[TCP_SEQ_P + 2];
  ((unsigned char*)seq)[2] = buffer[TCP_SEQ_P + 1];
@@ -276,31 +280,28 @@ static unsigned char TcpGetConnectionId(unsigned char mac[6], unsigned char ip[4
  return i;
 }
 
-// todo komentar na ack 0 refactor
-static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connection, unsigned short *waiting, unsigned short timeout, unsigned short sendedDataLength, unsigned char expectedFlag){
- unsigned short length;
- unsigned short srcPort;
- unsigned long ack_packet_seq;
- unsigned long ack_packet_ack;
- length = ethWaitPacket(buffer, ETH_TYPE_IP_V, waiting, timeout);
+// todo koment sendedDatalength 0
+static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connection, unsigned short sendedDataLength, unsigned char expectedFlag){
+ unsigned short length, srcPort;
+ unsigned long seq, ack;
+ length = EthWaitPacket(buffer, ETH_TYPE_IP_V, 0);
  if(length != 0){
   if(ip_packet_is_ip(buffer) && tcp_is_tcp(buffer, connection->port, &srcPort)){
    unsigned char srcMac[6];
    unsigned short tcp_length = tcp_get_dlength(buffer);
    memcpy(srcMac, buffer + ETH_SRC_MAC_P, 6);
-   tcp_get_sequence(buffer, &ack_packet_seq, &ack_packet_ack);
+   TcpGetSequence(buffer, &seq, &ack);
    if(
     TcpIsConnection(*connection, buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, connection->port, srcPort) &&
-    ((buffer[ TCP_FLAGS_P ] & expectedFlag) || expectedFlag == 0) &&
-    (tcp_length != 0 || expectedFlag != 0) &&// todo asi silenost
-    ((connection->expectedSequence == ack_packet_seq) || (expectedFlag & TCP_FLAG_SYN_V)) &&
-    (connection->sendSequence + sendedDataLength) == ack_packet_ack
+    ((buffer[ TCP_FLAGS_P ] & expectedFlag)) &&
+    ((connection->expectedSequence == seq) || (expectedFlag & TCP_FLAG_SYN_V)) &&
+    (connection->sendSequence + sendedDataLength) == ack
    ){
     if(expectedFlag & TCP_FLAG_SYN_V){
-     connection->expectedSequence = ack_packet_seq;
+     connection->expectedSequence = seq;
     }
-    connection->sendSequence = ack_packet_ack;
-    if(tcp_length != 0 && expectedFlag != 0) {
+    connection->sendSequence = ack;
+    if(tcp_length != 0 && sendedDataLength != 0) {
      tcp_handle_incoming_packet(buffer, length, srcMac, connection->ip, srcPort, connection->remotePort);
     }
     return 1;
@@ -330,7 +331,7 @@ unsigned char TcpGetEmptyConenctionId(){
  return TCP_INVALID_CONNECTION_ID;
 }
 
-// todo mozna jiny nazvi pormynch na vstupu
+// todo predelat vraceni conID
 //********************************************************************************************
 //
 // Function : TcpConnect
@@ -350,13 +351,15 @@ void TcpConnect(unsigned char *buffer, TcpConnection *connection, const unsigned
  }
  unsigned short waiting = 0;
  for(;;){
-  TcpSendPacket(buffer, *connection, TCP_FLAG_SYN_V, 0);
-  if(TcpWaitPacket(buffer, connection, &waiting, 300, 1, TCP_FLAG_SYN_V | TCP_FLAG_ACK_V)){
+  if(waiting % 300 == 0){
+   TcpSendPacket(buffer, *connection, TCP_FLAG_SYN_V, 0);
+  }
+  if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_SYN_V | TCP_FLAG_ACK_V)){
    TcpSendAck(buffer, connection->expectedSequence, 1, connection);
    connection->state = TCP_STATE_ESTABLISHED;
    return;
   }
-  waiting += 300;
+  waiting++;
   if(waiting > timeout){
    break;
   }
@@ -364,18 +367,40 @@ void TcpConnect(unsigned char *buffer, TcpConnection *connection, const unsigned
  connection->state = TCP_STATE_NO_CONNECTION;
 }
 
-unsigned char TcpSendData(unsigned char *buffer, TcpConnection *connection, unsigned short timeout, unsigned char *data, unsigned short dataLength){
+unsigned char TcpSendData(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout, const unsigned char *data, unsigned short dataLength){
  if(connection->state != TCP_STATE_ESTABLISHED){
   return 0;
  }
  unsigned short waiting = 0;
  for(;;){
-  TcpPutsData(buffer, data, dataLength, 0);
-  TcpSendPacket(buffer, *connection, TCP_FLAG_ACK_V, dataLength);
-  if(TcpWaitPacket(buffer, connection, &waiting, 300, dataLength, TCP_FLAG_ACK_V)){
+  if(waiting % 300 == 0){
+   TcpPutsData(buffer, data, dataLength, 0);
+   TcpSendPacket(buffer, *connection, TCP_FLAG_ACK_V, dataLength);
+  }
+  if(TcpWaitPacket(buffer, connection, dataLength, TCP_FLAG_ACK_V)){
    return 1;
   }
-  waiting += 300;
+  waiting++;
+  if(waiting > timeout){
+   break;
+  }
+ }
+ return 0;
+}
+
+unsigned char TcpReceiveData(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout, unsigned char **data, unsigned short *dataLength){
+ if(connection->state != TCP_STATE_ESTABLISHED){
+  return 0;
+ }
+ unsigned short waiting = 0;
+ for(;;){
+  if(TcpWaitPacket(buffer, connection, 0, TCP_FLAG_ACK_V)){
+   *data = buffer + TcpGetDataPosition(buffer);
+   *dataLength = tcp_get_dlength(buffer);
+   TcpSendAck(buffer, connection->expectedSequence, *dataLength, connection);
+   return 1;
+  }
+  waiting++;
   if(waiting > timeout){
    break;
   }
@@ -389,11 +414,13 @@ static unsigned char TcpClose(unsigned char *buffer, TcpConnection *connection, 
  }
  unsigned short waiting = 0;
  for(;;){
-  TcpSendPacket(buffer, *connection, TCP_FLAG_FIN_V, 0);
-  if(TcpWaitPacket(buffer, connection, &waiting, 300, 1, TCP_FLAG_ACK_V)){
+  if(waiting % 300 == 0){
+   TcpSendPacket(buffer, *connection, TCP_FLAG_FIN_V, 0);
+  }
+  if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_ACK_V)){
    return 1;
   }
-  waiting += 300;
+  waiting++;
   if(waiting > timeout){
    break;
   }
@@ -407,9 +434,8 @@ void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, u
  if(conID == TCP_INVALID_CONNECTION_ID){
   return;
  }
- unsigned long seq;
- unsigned long ack;
- tcp_get_sequence(buffer, &seq, &ack);
+ unsigned long seq, ack;
+ TcpGetSequence(buffer, &seq, &ack);
  unsigned short data_length = tcp_get_dlength(buffer);
  char out[100];
  sprintf(out, "Id conID %u state %u port %u remote port %u\n", conID, tcp_connections[conID].state, tcp_connections[conID].port, tcp_connections[conID].remotePort);
@@ -433,9 +459,6 @@ void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, u
   TcpSendPacket(buffer, tcp_connections[conID], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
   return;
  }
- if(tcp_connections[conID].expectedSequence != seq){
-  return;
- }
  if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && tcp_connections[conID].state == TCP_STATE_SYN_RECEIVED){
   // pridani callbacku nove spojeni
   sprintf(out, "Established packet\n");
@@ -444,17 +467,17 @@ void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, u
   tcp_connections[conID].sendSequence = ack;
  }
  if((buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && (tcp_connections[conID].state == TCP_STATE_ESTABLISHED || tcp_connections[conID].state == TCP_STATE_DYEING)){
-  TcpSendAck(buffer, seq, 1, tcp_connections + conID);
+  if(!TcpSendAck(buffer, seq, 1, tcp_connections + conID)){
+   return;
+  }
   sprintf(out, "Zadost o konec \n");
   UARTWriteChars(out);
-  if(tcp_connections[conID].state == TCP_STATE_ESTABLISHED){
-   tcp_connections[conID].state = TCP_STATE_DYEING;
-   // pridat callback na ukoncene spojeni
-   TcpClose(buffer, tcp_connections + conID, 900);
-   tcp_connections[conID].state = TCP_STATE_NO_CONNECTION;// mozna presunout do close
-   sprintf(out, "Konec\n");
-   UARTWriteChars(out);
-  }
+  tcp_connections[conID].state = TCP_STATE_DYEING;
+  // pridat callback na ukoncene spojeni
+  TcpClose(buffer, tcp_connections + conID, 900);
+  tcp_connections[conID].state = TCP_STATE_NO_CONNECTION;// mozna presunout do close
+  sprintf(out, "Konec\n");
+  UARTWriteChars(out);
  }
  if(tcp_connections[conID].state != TCP_STATE_ESTABLISHED){
   return;
@@ -467,11 +490,13 @@ void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, u
  }
  // pridani callbacku na prichozi data
  UARTWriteChars("Prichozi data '");
- UARTWriteCharsLength(buffer + TCP_SRC_PORT_H_P + tcp_get_hlength(buffer), data_length);
+ UARTWriteCharsLength(buffer + TcpGetDataPosition(buffer), data_length);
  UARTWriteChars("'\n");
 
  unsigned char data[50];
- memcpy(data, buffer + TCP_SRC_PORT_H_P + tcp_get_hlength(buffer), data_length);
+ unsigned char *dataIncome;
+ unsigned short delkaPrichozichDat;
+ memcpy(data, buffer + TcpGetDataPosition(buffer), data_length);
 
  unsigned char testConnectionId = TcpGetEmptyConenctionId();
  if(testConnectionId == TCP_INVALID_CONNECTION_ID){
@@ -482,6 +507,12 @@ void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, u
 
  if(TcpSendData(buffer, tcp_connections + testConnectionId, 5000, data, data_length)){
   UARTWriteChars("Odchozi data OK\n");
+ }
+
+ if(TcpReceiveData(buffer, tcp_connections + testConnectionId, 20000, &dataIncome, &delkaPrichozichDat)){
+  UARTWriteChars("Prichozi data klient '");
+  UARTWriteCharsLength(dataIncome, delkaPrichozichDat);
+  UARTWriteChars("'\n");
  }
  return;
 }

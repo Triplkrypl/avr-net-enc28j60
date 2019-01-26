@@ -119,10 +119,11 @@ unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type){
  return ( rxtx_buffer[ ETH_TYPE_H_P ] == high(type) && rxtx_buffer[ ETH_TYPE_L_P ] == low(type));
 }
 
-// toto pridat komentar pro timeout, premenovat
-unsigned char ethWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short *waiting, unsigned short timeout){
+// toto pridat komentar
+unsigned char EthWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short timeout){
  unsigned short length;
  unsigned char microWaiting = 0;
+ unsigned short waiting = 0;
  for(;;){
   _delay_us(100);
   length = enc28j60_packet_receive(rxtx_buffer, 400);// todo nastavit velikost bufferu konstantou
@@ -135,9 +136,9 @@ unsigned char ethWaitPacket(unsigned char *rxtx_buffer, unsigned short type, uns
   microWaiting += 1;
   if(microWaiting == 10){
    microWaiting = 0;
-   *waiting += 1;
+   waiting += 1;
   }
-  if(*waiting > timeout){
+  if(waiting > timeout){
    break;
   }
  }

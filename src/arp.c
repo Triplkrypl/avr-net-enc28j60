@@ -191,10 +191,9 @@ void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac )
 //*******************************************************************************************
 unsigned char ArpWhoIs (unsigned char *rxtx_buffer, const unsigned char *dest_ip, unsigned char *dest_mac){
  unsigned short dlength;
- unsigned short waiting = 0;
 
  arp_send_request(rxtx_buffer, dest_ip );
- dlength = ethWaitPacket(rxtx_buffer, ETH_TYPE_ARP_V, &waiting, 100);
+ dlength = EthWaitPacket(rxtx_buffer, ETH_TYPE_ARP_V, 100);
  if(dlength != 0){
   if(arp_packet_is_arp(rxtx_buffer, ARP_OPCODE_REPLY_V )){
    // copy destination mac address from arp reply packet to destination mac address
@@ -203,6 +202,5 @@ unsigned char ArpWhoIs (unsigned char *rxtx_buffer, const unsigned char *dest_ip
   }
   NetHandleIncomingPacket(rxtx_buffer, dlength);
  }
- // destination ip was not found on network
  return 0;
 }
