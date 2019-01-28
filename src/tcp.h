@@ -67,31 +67,25 @@
 #define TCP_OPTIONS_P 		0x36
 #define TCP_DATA_P			0x36
 
-typedef struct TcpConnection{
- unsigned long sendSequence;
- unsigned long expectedSequence;
+typedef struct{
  unsigned short port;
  unsigned short remotePort;
  unsigned char state;
  unsigned char ip[IP_V4_ADDRESS_SIZE];
  unsigned char mac[MAC_ADDRESS_SIZE];
-} TcpConnection;
+} TcpConnectionInfo;
 
-// todo verejdne nepracovat se strukturou TcpConnection
 //********************************************************************************************
 //
 // Prototype function
 //
 //********************************************************************************************
 void TcpInit();
-WORD tcp_get_dlength( BYTE *rxtx_buffer );
-BYTE tcp_get_hlength( BYTE *rxtx_buffer );
-WORD tcp_puts_data( BYTE *rxtx_buffer, BYTE *data, WORD offset );
-unsigned char tcp_is_tcp(unsigned char *rxtx_buffer, unsigned short dest_port, unsigned short* src_port);
-unsigned char TcpSendAck(unsigned char *buffer, unsigned long sequence, unsigned short dataLength, TcpConnection *conenction);// todo je to potreba mit z venci
-void TcpConnect(unsigned char *buffer, TcpConnection *connection, const unsigned char *desIp, const unsigned short destPort, const unsigned short srcPort, const unsigned short timeout);
-unsigned char TcpGetEmptyConenctionId();
-unsigned char TcpSendData(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
-unsigned char TcpReceiveData(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
-void tcp_handle_incoming_packet(unsigned char buffer[], unsigned short length, unsigned char srcMac[], unsigned char srcIp[], unsigned short srcPort, unsigned short destPort);
+unsigned char TcpIsTcp(const unsigned char *rxtx_buffer);
+const TcpConnectionInfo *TcpGetConnectionInfo(const unsigned char connectionId);
+unsigned char TcpConnect(unsigned char *buffer, const unsigned char *desIp, const unsigned short destPort, const unsigned short srcPort, const unsigned short timeout);// rotujici src port
+unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
+unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
+unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout);
+void TcpHandleIncomingPacket(unsigned char buffer[], const unsigned short length, const unsigned char srcMac[], const unsigned char srcIp[]);
 #endif
