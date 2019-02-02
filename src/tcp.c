@@ -56,18 +56,8 @@
 //
 //********************************************************************************************
 
-// toto prejmenovat
-struct TcpConnectionStructure{
- unsigned long sendSequence;
- unsigned long expectedSequence;
- unsigned short port;
- unsigned short remotePort;
- unsigned char state;
- unsigned char ip[IP_V4_ADDRESS_SIZE];
- unsigned char mac[MAC_ADDRESS_SIZE];
-};
-
-static struct TcpConnectionStructure connections[TCP_MAX_CONNECTIONS];
+static unsigned long connectPortRotaiting = TCP_MIN_DINAMIC_PORT;
+static TcpConnection connections[TCP_MAX_CONNECTIONS];
 
 //*****************************************************************************************
 //
@@ -82,15 +72,14 @@ void TcpInit(){
  }
 }
 
-// todo nejpise inline
 //*****************************************************************************************
 //
 // Function : TcpGetHeaderLength
 // Description : claculate tcp received header length
 //
 //*****************************************************************************************
-static unsigned char TcpGetHeaderLength(unsigned char *rxtx_buffer){
-	return ((rxtx_buffer[ TCP_HEADER_LEN_P ]>>4) * 4); // generate len in bytes;
+static inline unsigned char TcpGetHeaderLength(unsigned char *rxtx_buffer){
+ return ((rxtx_buffer[ TCP_HEADER_LEN_P ]>>4) * 4); // generate len in bytes;
 }
 
 //*****************************************************************************************
@@ -109,8 +98,7 @@ static inline unsigned short TcpGetDataPosition(unsigned char *buffer){
 // Description : claculate tcp received data length
 //
 //*****************************************************************************************
-unsigned short TcpGetDataLength(unsigned char *rxtx_buffer)
-{
+unsigned short TcpGetDataLength(unsigned char *rxtx_buffer){
 	int dlength, hlength;
 
 	dlength = ( rxtx_buffer[ IP_TOTLEN_H_P ] <<8 ) | ( rxtx_buffer[ IP_TOTLEN_L_P ] );
@@ -123,8 +111,13 @@ unsigned short TcpGetDataLength(unsigned char *rxtx_buffer)
 	return dlength;
 }
 
-// todo mozna inline
-static void TcpGetSequence(unsigned char *buffer, unsigned long *seq, unsigned long *ack){
+//*****************************************************************************************
+//
+// Function : TcpGetSequence
+// Description : get sequence and acknowledgment number from packet string
+//
+//*****************************************************************************************
+static inline void TcpGetSequence(const unsigned char *buffer, unsigned long *seq, unsigned long *ack){
  ((unsigned char*)seq)[0] = buffer[TCP_SEQ_P + 3];
  ((unsigned char*)seq)[1] = buffer[TCP_SEQ_P + 2];
  ((unsigned char*)seq)[2] = buffer[TCP_SEQ_P + 1];
@@ -136,6 +129,12 @@ static void TcpGetSequence(unsigned char *buffer, unsigned long *seq, unsigned l
  ((unsigned char*)ack)[3] = buffer[TCP_SEQACK_P];
 }
 
+//*****************************************************************************************
+//
+// Function : TcpSetSequence
+// Description : write sequence and acknowledgment number into packet string
+//
+//*****************************************************************************************
 static inline void TcpSetSequence(unsigned char *buffer, const unsigned long seq, const unsigned long ack){
  buffer[TCP_SEQ_P + 3] = ((unsigned char*)&seq)[0];
  buffer[TCP_SEQ_P + 2] = ((unsigned char*)&seq)[1];
@@ -148,6 +147,12 @@ static inline void TcpSetSequence(unsigned char *buffer, const unsigned long seq
  buffer[TCP_SEQACK_P] = ((unsigned char*)&ack)[3];
 }
 
+//*****************************************************************************************
+//
+// Function : TcpGetPort
+// Description : get destination and source port from packet string
+//
+//*****************************************************************************************
 static inline void TcpGetPort(const unsigned char *buffer, unsigned short *destination, unsigned short *source){
  ((unsigned char*)destination)[1] = buffer[TCP_DST_PORT_H_P];
  *((unsigned char*)destination) = buffer[TCP_DST_PORT_L_P];
@@ -156,6 +161,12 @@ static inline void TcpGetPort(const unsigned char *buffer, unsigned short *desti
  *((unsigned char*)source) = buffer[TCP_SRC_PORT_L_P];
 }
 
+//*****************************************************************************************
+//
+// Function : TcpSetPort
+// Description : write destination and source port into packet string
+//
+//*****************************************************************************************
 static inline void TcpSetPort(unsigned char *buffer, const unsigned short destination, const unsigned short source){
  buffer[TCP_DST_PORT_H_P] = ((unsigned char*)&destination)[1];
  buffer[TCP_DST_PORT_L_P] = *((unsigned char*)&destination);
@@ -164,21 +175,17 @@ static inline void TcpSetPort(unsigned char *buffer, const unsigned short destin
  buffer[TCP_SRC_PORT_L_P] = *((unsigned char*)&source);
 }
 
-// todo refactor drobnej
+// todo nastavit kontrolni soucet pres funkci + vyresit nastaveni max segmentu
 //********************************************************************************************
 //
 // Function : TcpSendPacket
 // Description : send tcp packet to network.
 //
 //********************************************************************************************
-static void TcpSendPacket(unsigned char *rxtx_buffer, const struct TcpConnectionStructure connection, unsigned char flags, unsigned short dlength){
-	BYTE tseq;
-	WORD_BYTES ck;
-
- eth_generate_header( rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, connection.mac);
+static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connection, unsigned char flags, unsigned short dlength){
+ eth_generate_header(rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, connection.mac);
  ip_generate_header(rxtx_buffer, (WORD_BYTES){(sizeof(IP_HEADER) + sizeof(TCP_HEADER) + dlength)}, IP_PROTO_TCP_V, connection.ip);
 
-	// initial tcp sequence number
 	// setup maximum segment size
 	// require to setup first packet is receive or transmit only
 	/*if ( max_segment_size )
@@ -194,47 +201,42 @@ static void TcpSendPacket(unsigned char *rxtx_buffer, const struct TcpConnection
 	}
 	else
 	{*/
-		// no options: 20 bytes: 5*32/8 = 20
-		rxtx_buffer[ TCP_HEADER_LEN_P ] = 0x50;
+ // no options: 20 bytes: 5*32/8 = 20
+ rxtx_buffer[TCP_HEADER_LEN_P] = 0x50;
   //}
-
 
  TcpSetSequence(rxtx_buffer, connection.sendSequence, connection.expectedSequence);
  TcpSetPort(rxtx_buffer, connection.remotePort, connection.port);
-
-	// setup tcp flags
-	rxtx_buffer [ TCP_FLAGS_P ] = flags;
-
-	// setup maximum windows size
-	rxtx_buffer [ TCP_WINDOWSIZE_H_P ] = HIGH((MAX_RX_BUFFER-sizeof(IP_HEADER)-sizeof(ETH_HEADER)));
-	rxtx_buffer [ TCP_WINDOWSIZE_L_P ] = LOW((MAX_RX_BUFFER-sizeof(IP_HEADER)-sizeof(ETH_HEADER)));
-
-	// setup urgend pointer (not used -> 0)
-	rxtx_buffer[ TCP_URGENT_PTR_H_P ] = 0;
-	rxtx_buffer[ TCP_URGENT_PTR_L_P ] = 0;
-
-	// clear old checksum and calculate new checksum
-	rxtx_buffer[ TCP_CHECKSUM_H_P ] = 0;
-	rxtx_buffer[ TCP_CHECKSUM_L_P ] = 0;
-	// This is computed as the 16-bit one's complement of the one's complement
-	// sum of a pseudo header of information from the
-	// IP header, the TCP header, and the data, padded
-	// as needed with zero bytes at the end to make a multiple of two bytes.
-	// The pseudo header contains the following fields:
-	//
-	// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-	// +00+01+02+03+04+05+06+07+08+09+10+11+12+13+14+15+16+17+18+19+20+21+22+23+24+25+26+27+28+29+30+31+
-	// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-	// +                                       Source IP address                                       +
-	// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-	// +                                     Destination IP address                                    +
-	// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-	// +           0           +      IP Protocol      +                    Total length               +
-	// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-	ck.word = software_checksum(rxtx_buffer + IP_SRC_IP_P, sizeof(TCP_HEADER)+dlength+8, IP_PROTO_TCP_V + sizeof(TCP_HEADER) + dlength );
-	rxtx_buffer[ TCP_CHECKSUM_H_P ] = ck.byte.high;
-	rxtx_buffer[ TCP_CHECKSUM_L_P ] = ck.byte.low;
-
+ // setup tcp flags
+ rxtx_buffer [ TCP_FLAGS_P ] = flags;
+ // setup maximum windows size
+ rxtx_buffer [ TCP_WINDOWSIZE_H_P ] = HIGH((MAX_RX_BUFFER-sizeof(IP_HEADER)-sizeof(ETH_HEADER)));
+ rxtx_buffer [ TCP_WINDOWSIZE_L_P ] = LOW((MAX_RX_BUFFER-sizeof(IP_HEADER)-sizeof(ETH_HEADER)));
+ // setup urgend pointer (not used -> 0)
+ rxtx_buffer[ TCP_URGENT_PTR_H_P ] = 0;
+ rxtx_buffer[ TCP_URGENT_PTR_L_P ] = 0;
+ // clear old checksum and calculate new checksum
+ rxtx_buffer[ TCP_CHECKSUM_H_P ] = 0;
+ rxtx_buffer[ TCP_CHECKSUM_L_P ] = 0;
+ // This is computed as the 16-bit one's complement of the one's complement
+ // sum of a pseudo header of information from the
+ // IP header, the TCP header, and the data, padded
+ // as needed with zero bytes at the end to make a multiple of two bytes.
+ // The pseudo header contains the following fields:
+ //
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // +00+01+02+03+04+05+06+07+08+09+10+11+12+13+14+15+16+17+18+19+20+21+22+23+24+25+26+27+28+29+30+31+
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // +                                       Source IP address                                       +
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // +                                     Destination IP address                                    +
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // +           0           +      IP Protocol      +                    Total length               +
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ WORD_BYTES ck;
+ ck.word = software_checksum(rxtx_buffer + IP_SRC_IP_P, sizeof(TCP_HEADER)+dlength+8, IP_PROTO_TCP_V + sizeof(TCP_HEADER) + dlength );
+ rxtx_buffer[ TCP_CHECKSUM_H_P ] = ck.byte.high;
+ rxtx_buffer[ TCP_CHECKSUM_L_P ] = ck.byte.low;
  // send packet to ethernet media
  enc28j60_packet_send(rxtx_buffer, sizeof(ETH_HEADER)+sizeof(IP_HEADER)+sizeof(TCP_HEADER)+dlength);
 }
@@ -245,7 +247,7 @@ static void TcpSendPacket(unsigned char *rxtx_buffer, const struct TcpConnection
 // Description : send ack packet and detect if is first sending of ack
 //
 //********************************************************************************************
-static unsigned char TcpSendAck(unsigned char *buffer, struct TcpConnectionStructure *connection, const unsigned long sequence, const unsigned short dataLength){
+static unsigned char TcpSendAck(unsigned char *buffer, TcpConnection *connection, const unsigned long sequence, const unsigned short dataLength){
  unsigned char expectedData = sequence == connection->expectedSequence;
  if(expectedData){
   connection->expectedSequence += dataLength;
@@ -273,15 +275,15 @@ unsigned char TcpIsTcp(const unsigned char *rxtx_buffer){
 // Description :
 //
 //********************************************************************************************
-const TcpConnectionInfo *TcpGetConnectionInfo(const unsigned char connectionId){
+const TcpConnection *TcpGetConnection(const unsigned char connectionId){
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }
- struct TcpConnectionStructure *connection = connections + connectionId;
+ const TcpConnection *connection = connections + connectionId;
  if(connection->state == TCP_STATE_NO_CONNECTION){
   return 0;
  }
- return (TcpConnectionInfo*)(((unsigned char*)connection) + 8);
+ return connection;
 }
 
 //********************************************************************************************
@@ -290,7 +292,7 @@ const TcpConnectionInfo *TcpGetConnectionInfo(const unsigned char connectionId){
 // Description : compare if tcp connection and tcp connection parts is same
 //
 //********************************************************************************************
-static inline unsigned char TcpIsConnection(const struct TcpConnectionStructure connection, const unsigned char mac[MAC_ADDRESS_SIZE], const const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short remotePort){
+static inline unsigned char TcpIsConnection(const TcpConnection connection, const unsigned char mac[MAC_ADDRESS_SIZE], const const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short remotePort){
  return
   connection.state != TCP_STATE_NO_CONNECTION &&
   connection.port == port &&
@@ -338,8 +340,13 @@ static unsigned char TcpGetConnectionId(const unsigned char mac[MAC_ADDRESS_SIZE
  return i;
 }
 
-// todo koment sendedDatalength 0
-static unsigned char TcpWaitPacket(unsigned char *buffer, struct TcpConnectionStructure *connection, unsigned short sendedDataLength, unsigned char expectedFlag){
+//********************************************************************************************
+//
+// Function : TcpWaitPacket
+// Description : synchronous waiting for any tcp packet if sendedDataLength is zero function expect than waiting is for data packet
+//
+//********************************************************************************************
+static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connection, unsigned short sendedDataLength, unsigned char expectedFlag){
  unsigned short length = EthWaitPacket(buffer, ETH_TYPE_IP_V, 0);
  if(length != 0){
   if(ip_packet_is_ip(buffer) && TcpIsTcp(buffer)){
@@ -380,19 +387,20 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, struct TcpConnectionSt
 // Description : active creation connection to server
 //
 //********************************************************************************************
-unsigned char TcpConnect(unsigned char *buffer, const unsigned char *desIp, const unsigned short destPort, const unsigned short srcPort, const unsigned short timeout){
+unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short timeout){
  unsigned char connectionId = TcpGetEmptyConenctionId();
  if(connectionId == TCP_INVALID_CONNECTION_ID){
   return TCP_INVALID_CONNECTION_ID;
  }
- struct TcpConnectionStructure *connection = connections + connectionId;
- memcpy(connection->ip, desIp, 4);
- connection->port = srcPort;
- connection->remotePort = destPort;
+ TcpConnection *connection = connections + connectionId;
+ memcpy(connection->ip, ip, IP_V4_ADDRESS_SIZE);
+ connection->port = connectPortRotaiting;
+ connection->remotePort = port;
  connection->sendSequence = 2;
  connection->expectedSequence = 0;
  connection->state = TCP_STATE_NEW;
- if(!ArpWhoIs(buffer, desIp, connection->mac)){
+ connectPortRotaiting = (connectPortRotaiting == TCP_MAX_PORT) ? TCP_MIN_DINAMIC_PORT : connectPortRotaiting + 1;
+ if(!ArpWhoIs(buffer, ip, connection->mac)){
   connection->state = TCP_STATE_NO_CONNECTION;
   return TCP_INVALID_CONNECTION_ID;
  }
@@ -425,7 +433,7 @@ unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionI
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }
- struct TcpConnectionStructure *connection = connections + connectionId;
+ TcpConnection *connection = connections + connectionId;
  if(connection->state != TCP_STATE_ESTABLISHED){
   return 0;
  }
@@ -456,7 +464,7 @@ unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connecti
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }
- struct TcpConnectionStructure *connection = connections + connectionId;
+ TcpConnection *connection = connections + connectionId;
  if(connection->state != TCP_STATE_ESTABLISHED){
   return 0;
  }
@@ -482,7 +490,7 @@ unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connecti
 // Description : send fin packet and wait for him ack packet
 //
 //********************************************************************************************
-static unsigned char TcpClose(unsigned char *buffer, struct TcpConnectionStructure *connection, const unsigned short timeout){
+static unsigned char TcpClose(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout){
  if(connection->state != TCP_STATE_DYEING){
   return 0;
  }
@@ -532,8 +540,14 @@ unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connection
  return 1;
 }
 
-// todo comment dark magic refactor
-void TcpHandleIncomingPacket(unsigned char buffer[], const unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]){
+// todo odebrat testovaci kod
+//********************************************************************************************
+//
+// Function : TcpHandleIncomingPacket
+// Description : function will passive processed any incoming tcp packet
+//
+//********************************************************************************************
+void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]){
  unsigned char conID = TCP_INVALID_CONNECTION_ID;
  {
   unsigned short port, remotePort;
@@ -609,29 +623,16 @@ void TcpHandleIncomingPacket(unsigned char buffer[], const unsigned short length
  UARTWriteChars("'\n");
 
  unsigned char data[50];
- unsigned char *dataIncome;
- unsigned short delkaPrichozichDat;
  memcpy(data, buffer + TcpGetDataPosition(buffer), data_length);
 
- unsigned char testConnectIp[IP_V4_ADDRESS_SIZE] = {192, 168, 0, 30};
- unsigned char testConnectionId = TcpConnect(buffer, testConnectIp, 800, 7050, 2000);
- if(testConnectionId == TCP_INVALID_CONNECTION_ID){
-  return;
- }
-
- if(TcpSendData(buffer, testConnectionId, 5000, data, data_length)){
+ if(TcpSendData(buffer, conID, 5000, data, data_length)){
   UARTWriteChars("Odchozi data OK\n");
  }
 
- if(TcpReceiveData(buffer, testConnectionId, 20000, &dataIncome, &delkaPrichozichDat)){
-  UARTWriteChars("Prichozi data klient '");
-  UARTWriteCharsLength(dataIncome, delkaPrichozichDat);
-  UARTWriteChars("'\n");
- }
+ unsigned char testConnectIp[IP_V4_ADDRESS_SIZE] = {192, 168, 0, 30};
+ unsigned char testConnectionId = TcpConnect(buffer, testConnectIp, 800, 2000);
+ sprintf(out, "Nove spojeni %u\n", testConnectionId);
+ UARTWriteChars(out);
 
- TcpDiconnect(buffer, testConnectionId, 2000);
- TcpDiconnect(buffer, conID, 1000);
-
- UARTWriteChars("Klient disconnect\n");
  return;
 }

@@ -29,10 +29,6 @@
 #define TCP_HEADER_LEN		20
 #define TCP_OPTION_LEN		4
 
-#ifndef TCP_MAX_CONNECTIONS
-#define TCP_MAX_CONNECTIONS 2
-#endif
-
 #define TCP_INVALID_CONNECTION_ID 0xff
 
 #define TCP_STATE_NO_CONNECTION 0
@@ -40,6 +36,9 @@
 #define TCP_STATE_SYN_RECEIVED 2
 #define TCP_STATE_ESTABLISHED 3
 #define TCP_STATE_DYEING 4
+
+#define TCP_MIN_DINAMIC_PORT 49152
+#define TCP_MAX_PORT 65535
 
 #define TCP_FLAG_FIN_V		0x01
 #define TCP_FLAG_SYN_V		0x02
@@ -68,12 +67,14 @@
 #define TCP_DATA_P			0x36
 
 typedef struct{
+ unsigned long sendSequence;
+ unsigned long expectedSequence;
  unsigned short port;
  unsigned short remotePort;
  unsigned char state;
  unsigned char ip[IP_V4_ADDRESS_SIZE];
  unsigned char mac[MAC_ADDRESS_SIZE];
-} TcpConnectionInfo;
+} TcpConnection;
 
 //********************************************************************************************
 //
@@ -82,10 +83,10 @@ typedef struct{
 //********************************************************************************************
 void TcpInit();
 unsigned char TcpIsTcp(const unsigned char *rxtx_buffer);
-const TcpConnectionInfo *TcpGetConnectionInfo(const unsigned char connectionId);
-unsigned char TcpConnect(unsigned char *buffer, const unsigned char *desIp, const unsigned short destPort, const unsigned short srcPort, const unsigned short timeout);// rotujici src port
+const TcpConnection *TcpGetConnection(const unsigned char connectionId);
+unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short timeout);
 unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
 unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout);
-void TcpHandleIncomingPacket(unsigned char buffer[], const unsigned short length, const unsigned char srcMac[], const unsigned char srcIp[]);
+void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length, const unsigned char srcMac[], const unsigned char srcIp[]);
 #endif
