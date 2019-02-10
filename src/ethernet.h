@@ -40,17 +40,14 @@
 #define ETH_TYPE_H_P		12
 #define ETH_TYPE_L_P		13
 
-#define LOW(ushort) (ushort&0xFF)
-#define HIGH(ushort) ((ushort>>8)&0xFF)
-
 //********************************************************************************************
 //
 // Prototype function
 //
 //********************************************************************************************
 //void eth_generate_packet ( ETH_HEADER eth_header );
-WORD software_checksum( BYTE *rxtx_buffer, WORD len, DWORD sum);// refactor
-void eth_generate_header ( BYTE *rxtx_buffer, const WORD_BYTES type, const unsigned char destMac[MAC_ADDRESS_SIZE]);
+unsigned short software_checksum(unsigned char *rxtx_buffer, unsigned short len, unsigned long sum);// refactor
+void eth_generate_header(unsigned char *rxtx_buffer, const WORD_BYTES type, const unsigned char destMac[MAC_ADDRESS_SIZE]);
 unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type);// todo refactor
 unsigned char EthWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short timeout);
 #endif

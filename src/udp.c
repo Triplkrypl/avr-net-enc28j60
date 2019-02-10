@@ -25,13 +25,15 @@
 //
 //********************************************************************************************
 #include "udp.h"
+#include "ethernet.h"
+#include "ip.h"
 //
 //********************************************************************************************
-// The User Datagram Protocol offers only a minimal transport service 
-// -- non-guaranteed datagram delivery 
-// -- and gives applications direct access to the datagram service of the IP layer. 
-// UDP is used by applications that do not require the level of service of TCP or 
-// that wish to use communications services (e.g., multicast or broadcast delivery) 
+// The User Datagram Protocol offers only a minimal transport service
+// -- non-guaranteed datagram delivery
+// -- and gives applications direct access to the datagram service of the IP layer.
+// UDP is used by applications that do not require the level of service of TCP or
+// that wish to use communications services (e.g., multicast or broadcast delivery)
 // not available from TCP.
 //
 // +------------+-----------+-------------+----------+
@@ -106,7 +108,7 @@ BYTE udp_is_udp ( BYTE *rxtx_buffer, unsigned short dest_port, unsigned short *s
 	if ( rxtx_buffer[IP_PROTO_P] != IP_PROTO_UDP_V ){
 		return 0;
 	}
-	
+
 	// check destination port
 	if(rxtx_buffer[UDP_DST_PORT_H_P] != ((unsigned char*)&dest_port)[1] || rxtx_buffer[ UDP_DST_PORT_L_P ] != ((unsigned char*)&dest_port)[0]){
    return 0;
@@ -121,10 +123,10 @@ BYTE udp_is_udp ( BYTE *rxtx_buffer, unsigned short dest_port, unsigned short *s
 void udp_send(unsigned char* rxtx_buffer, unsigned short source_port, unsigned char* dest_mac, unsigned char *dest_ip, unsigned short dest_port, unsigned short data_length){
  // set ethernet header
  eth_generate_header (rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, dest_mac );
- 
+
  // generate ip header and checksum
  ip_generate_header (rxtx_buffer, (WORD_BYTES){sizeof(IP_HEADER)+sizeof(UDP_HEADER)+data_length}, IP_PROTO_UDP_V, dest_ip );
- 
+
  // generate UDP header
  udp_generate_header (rxtx_buffer, source_port, (WORD_BYTES){dest_port}, (WORD_BYTES){sizeof(UDP_HEADER)+data_length});
 

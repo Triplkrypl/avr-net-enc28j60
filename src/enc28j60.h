@@ -268,16 +268,17 @@
 // buffer boundaries applied to internal 8K ram
 // the entire available packet buffer space is allocated
 //
-#define MAX_TX_BUFFER	1500
-#define MAX_RX_BUFFER	1500
+
+// max frame length which the conroller will accept:
+#define MAX_FRAMELEN	(NET_BUFFER_SIZE+4)        // maximum ethernet frame length
+
+#define MAX_TX_BUFFER	NET_BUFFER_SIZE
+#define MAX_RX_BUFFER	NET_BUFFER_SIZE
 // start with recbuf at 0/
 #define RXSTART_INIT	0x0000
-#define RXSTOP_INIT		(8192-1500-1)
-#define TXSTART_INIT	(8192-1500)
+#define RXSTOP_INIT		(8192-NET_BUFFER_SIZE-1)
+#define TXSTART_INIT	(8192-NET_BUFFER_SIZE)
 #define TXSTOP_INIT		8192
-//
-// max frame length which the conroller will accept:
-#define MAX_FRAMELEN	(1500+sizeof(ETH_HEADER)+4)        // maximum ethernet frame length
 
 #define MAC_ADDRESS_SIZE 6
 
@@ -291,7 +292,7 @@ WORD enc28j60_read_phyreg(BYTE address);
 void enc28j60PhyWrite(BYTE address, WORD_BYTES data);
 void enc28j60_init();
 BYTE enc28j60getrev(void);
-void enc28j60_packet_send ( BYTE *buffer, WORD length );
+void enc28j60_packet_send ( BYTE *buffer, unsigned short length);
 BYTE enc28j60_mac_is_linked(void);
 WORD enc28j60_tx_checksum( WORD offset, WORD len );
 WORD enc28j60_packet_receive ( BYTE *rxtx_buffer, WORD max_length );

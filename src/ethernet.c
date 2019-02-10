@@ -91,8 +91,7 @@ void eth_generate_header(BYTE *rxtx_buffer, const WORD_BYTES type, const unsigne
 // The RFC has also a C code example: http://www.faqs.org/rfcs/rfc1071.html
 //
 //********************************************************************************************
-WORD software_checksum(BYTE *rxtx_buffer, WORD len, DWORD sum)
-{
+unsigned short software_checksum(unsigned char *rxtx_buffer, unsigned short len, unsigned long sum){
 	// build the sum of 16bit words
 	while(len>1)
 	{

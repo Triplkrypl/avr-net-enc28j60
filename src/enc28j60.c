@@ -336,15 +336,15 @@ BYTE enc28j60getrev(void)
 // Description : Send packet to network.
 //
 //*******************************************************************************************
-void enc28j60_packet_send ( BYTE *buffer, WORD length )
+void enc28j60_packet_send ( BYTE *buffer, unsigned short length )
 {
 	//Set the write pointer to start of transmit buffer area
-	enc28j60Write(EWRPTL, LOW(TXSTART_INIT) );
-	enc28j60Write(EWRPTH, HIGH(TXSTART_INIT) );
+	enc28j60Write(EWRPTL, low(TXSTART_INIT));
+	enc28j60Write(EWRPTH, high(TXSTART_INIT));
 
 	// Set the TXND pointer to correspond to the packet size given
-	enc28j60Write(ETXNDL, LOW((TXSTART_INIT+length)) );
-	enc28j60Write(ETXNDH, HIGH((TXSTART_INIT+length)) );
+	enc28j60Write(ETXNDL, low(TXSTART_INIT+length));
+	enc28j60Write(ETXNDH, high(TXSTART_INIT+length));
 
 	// write per-packet control byte (0x00 means use macon3 settings)
 	enc28j60WriteOp(ENC28J60_WRITE_BUF_MEM, 0, 0x00);

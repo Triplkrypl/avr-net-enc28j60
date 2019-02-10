@@ -61,6 +61,6 @@
 //void ip_fill_hdr_checksum( unsigned char *buf );
 
 // todo refactor
-BYTE ip_packet_is_ip ( BYTE *rxtx_buffer );
+unsigned char ip_packet_is_ip(unsigned char *rxtx_buffer);
 void ip_generate_header(unsigned char *rxtx_buffer, WORD_BYTES total_length, unsigned char protocol, const unsigned char *dest_ip);
 #endif

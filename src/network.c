@@ -1,10 +1,12 @@
 #include <string.h>
-#include "enc28j60.h"
-#include "arp.h"
+#include "util.c"
+#include "enc28j60.c"
+#include "ethernet.c"
+#include "arp.c"
+#include "ip.c"
 #include "icmp.h"
-#include "ip.h"
 #include "udp.h"
-#include "tcp.h"
+#include "tcp.c"
 #include "network.h"
 // todo predelat nacitani hlavicek a komentare
 void NetInit() {

@@ -24,10 +24,13 @@
 // http://www.gnu.de/gpl-ger.html
 //
 //********************************************************************************************
+#include <string.h>
+#include <stdio.h>
 #include "arp.h"
 #include "tcp.h"
 #include "ip.h"
 #include "ethernet.h"
+#include "network.h"
 //********************************************************************************************
 //
 // +------------+-----------+------------+----------+
@@ -175,49 +178,53 @@ static inline void TcpSetPort(unsigned char *buffer, const unsigned short destin
  buffer[TCP_SRC_PORT_L_P] = *((unsigned char*)&source);
 }
 
-// todo nastavit kontrolni soucet pres funkci + vyresit nastaveni max segmentu
+//*****************************************************************************************
+//
+// Function : TcpSetChecksum
+// Description : write checksum into packet string
+//
+//*****************************************************************************************
+static inline void TcpSetChecksum(unsigned char *buffer, const unsigned short checksum){
+ buffer[TCP_CHECKSUM_H_P] = ((unsigned char*)&checksum)[1];
+ buffer[TCP_CHECKSUM_L_P] = *((unsigned char*)&checksum);
+}
+
 //********************************************************************************************
 //
 // Function : TcpSendPacket
 // Description : send tcp packet to network.
 //
 //********************************************************************************************
-static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connection, unsigned char flags, unsigned short dlength){
+static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connection, const unsigned char flags, unsigned short dlength){
  eth_generate_header(rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, connection.mac);
- ip_generate_header(rxtx_buffer, (WORD_BYTES){(sizeof(IP_HEADER) + sizeof(TCP_HEADER) + dlength)}, IP_PROTO_TCP_V, connection.ip);
-
-	// setup maximum segment size
-	// require to setup first packet is receive or transmit only
-	/*if ( max_segment_size )
-	{
-		// setup maximum segment size
-		rxtx_buffer[ TCP_OPTIONS_P + 0 ] = 2;
-		rxtx_buffer[ TCP_OPTIONS_P + 1 ] = 4;
-		rxtx_buffer[ TCP_OPTIONS_P + 2 ] = HIGH(1408);
-		rxtx_buffer[ TCP_OPTIONS_P + 3 ] = LOW(1408);
-		// setup tcp header length 24 bytes: 6*32/8 = 24
-		rxtx_buffer[ TCP_HEADER_LEN_P ] = 0x60;
-		dlength += 4;
-	}
-	else
-	{*/
- // no options: 20 bytes: 5*32/8 = 20
- rxtx_buffer[TCP_HEADER_LEN_P] = 0x50;
-  //}
-
+ if(flags & TCP_FLAG_SYN_V){
+  // setup maximum segment size
+  rxtx_buffer[ TCP_OPTIONS_P + 0 ] = 2;
+  rxtx_buffer[ TCP_OPTIONS_P + 1 ] = 4;
+  // size of receive buffer - tcp header, ip header and eth header size
+  rxtx_buffer[ TCP_OPTIONS_P + 2 ] = high(MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN - TCP_HEADER_LEN);
+  rxtx_buffer[ TCP_OPTIONS_P + 3 ] = low(MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN - TCP_HEADER_LEN);
+  // setup tcp header length 24 bytes: 6*32/8 = 24
+  rxtx_buffer[ TCP_HEADER_LEN_P ] = 0x60;
+  dlength += 4;
+ }else{
+  // no options: 20 bytes: 5*32/8 = 20
+  rxtx_buffer[TCP_HEADER_LEN_P] = 0x50;
+ }
+ ip_generate_header(rxtx_buffer, (WORD_BYTES){IP_HEADER_LEN + TCP_HEADER_LEN + dlength}, IP_PROTO_TCP_V, connection.ip);
  TcpSetSequence(rxtx_buffer, connection.sendSequence, connection.expectedSequence);
  TcpSetPort(rxtx_buffer, connection.remotePort, connection.port);
  // setup tcp flags
- rxtx_buffer [ TCP_FLAGS_P ] = flags;
+ rxtx_buffer[TCP_FLAGS_P] = flags;
  // setup maximum windows size
- rxtx_buffer [ TCP_WINDOWSIZE_H_P ] = HIGH((MAX_RX_BUFFER-sizeof(IP_HEADER)-sizeof(ETH_HEADER)));
- rxtx_buffer [ TCP_WINDOWSIZE_L_P ] = LOW((MAX_RX_BUFFER-sizeof(IP_HEADER)-sizeof(ETH_HEADER)));
+ rxtx_buffer[TCP_WINDOWSIZE_H_P] = high(MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN);
+ rxtx_buffer[TCP_WINDOWSIZE_L_P] = low(MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN);
  // setup urgend pointer (not used -> 0)
- rxtx_buffer[ TCP_URGENT_PTR_H_P ] = 0;
- rxtx_buffer[ TCP_URGENT_PTR_L_P ] = 0;
+ rxtx_buffer[TCP_URGENT_PTR_H_P] = 0;
+ rxtx_buffer[TCP_URGENT_PTR_L_P] = 0;
  // clear old checksum and calculate new checksum
- rxtx_buffer[ TCP_CHECKSUM_H_P ] = 0;
- rxtx_buffer[ TCP_CHECKSUM_L_P ] = 0;
+ rxtx_buffer[TCP_CHECKSUM_H_P] = 0;
+ rxtx_buffer[TCP_CHECKSUM_L_P] = 0;
  // This is computed as the 16-bit one's complement of the one's complement
  // sum of a pseudo header of information from the
  // IP header, the TCP header, and the data, padded
@@ -233,10 +240,7 @@ static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connec
  // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
  // +           0           +      IP Protocol      +                    Total length               +
  // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
- WORD_BYTES ck;
- ck.word = software_checksum(rxtx_buffer + IP_SRC_IP_P, sizeof(TCP_HEADER)+dlength+8, IP_PROTO_TCP_V + sizeof(TCP_HEADER) + dlength );
- rxtx_buffer[ TCP_CHECKSUM_H_P ] = ck.byte.high;
- rxtx_buffer[ TCP_CHECKSUM_L_P ] = ck.byte.low;
+ TcpSetChecksum(rxtx_buffer, software_checksum(rxtx_buffer + IP_SRC_IP_P, sizeof(TCP_HEADER)+dlength+8, IP_PROTO_TCP_V + sizeof(TCP_HEADER) + dlength));
  // send packet to ethernet media
  enc28j60_packet_send(rxtx_buffer, sizeof(ETH_HEADER)+sizeof(IP_HEADER)+sizeof(TCP_HEADER)+dlength);
 }
@@ -437,6 +441,7 @@ unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionI
  if(connection->state != TCP_STATE_ESTABLISHED){
   return 0;
  }
+ // todo pocitat s max segment size
  unsigned short waiting = 0;
  for(;;){
   if(waiting % 300 == 0){
@@ -579,7 +584,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length,
     connections[conID].state = TCP_STATE_NO_CONNECTION;
     return;// todo neocekavany prichozi port zatim dropujem, vyresit icmp s odmitnutim
    }
-   // pridani callbacku nove spojeni
+   // todo pridani callbacku nove spojeni
   }
   connections[conID].state = TCP_STATE_SYN_RECEIVED;
   connections[conID].expectedSequence = seq + 1;
@@ -602,7 +607,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length,
   sprintf(out, "Zadost o konec \n");
   UARTWriteChars(out);
   connections[conID].state = TCP_STATE_DYEING;
-  // pridat callback na ukoncene spojeni
+  // todo pridat callback na ukoncene spojeni
   TcpClose(buffer, connections + conID, 900);
   connections[conID].state = TCP_STATE_NO_CONNECTION;
   sprintf(out, "Konec\n");
@@ -617,7 +622,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length,
  if(!TcpSendAck(buffer, connections + conID, seq, data_length)){
   return;
  }
- // pridani callbacku na prichozi data
+ // todo pridani callbacku na prichozi data
  UARTWriteChars("Prichozi data '");
  UARTWriteCharsLength(buffer + TcpGetDataPosition(buffer), data_length);
  UARTWriteChars("'\n");

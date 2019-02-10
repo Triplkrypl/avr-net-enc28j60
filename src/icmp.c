@@ -24,17 +24,20 @@
 // http://www.gnu.de/gpl-ger.html
 //
 //********************************************************************************************
+#include "enc28j60.h"
+#include "ethernet.h"
+#include "ip.h"
 #include "icmp.h"
 //********************************************************************************************
 //
-// The Internet Control Message Protocol (ICMP) is one of the core protocols of the 
-// Internet protocol suite. It is chiefly used by networked computers' 
-// operating systems to send error messages---indicating, for instance, 
+// The Internet Control Message Protocol (ICMP) is one of the core protocols of the
+// Internet protocol suite. It is chiefly used by networked computers'
+// operating systems to send error messages---indicating, for instance,
 // that a requested service is not available or that a host or router could not be reached.
 //
-// ICMP differs in purpose from TCP and UDP in that it is usually not used directly 
-// by user network applications. One exception is the ping tool, 
-// which sends ICMP Echo Request messages (and receives Echo Response messages) 
+// ICMP differs in purpose from TCP and UDP in that it is usually not used directly
+// by user network applications. One exception is the ping tool,
+// which sends ICMP Echo Request messages (and receives Echo Response messages)
 // to determine whether a host is reachable and how long packets take to get to and from that host.
 //
 // +------------+-----------+-------------+----------+
@@ -64,7 +67,7 @@ void icmp_generate_packet ( BYTE *rxtx_buffer, unsigned char length )
 {
 	BYTE i;
 	WORD_BYTES ck;
-	
+
 	// In send ICMP request case, generate new ICMP data.
 	if ( rxtx_buffer[ ICMP_TYPE_P ] == ICMP_TYPE_ECHOREQUEST_V )
 	{
@@ -94,7 +97,7 @@ void icmp_send_request ( BYTE *rxtx_buffer, unsigned char length, BYTE *dest_mac
 {
 	// set ethernet header
 	eth_generate_header ( rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, dest_mac );
-	
+
 	// generate ip header and checksum
 	ip_generate_header (	rxtx_buffer, (WORD_BYTES){sizeof(IP_HEADER) + sizeof(ICMP_HEADER)}, IP_PROTO_ICMP_V, dest_ip );
 
@@ -107,7 +110,7 @@ void icmp_send_request ( BYTE *rxtx_buffer, unsigned char length, BYTE *dest_mac
 	rxtx_buffer[ ICMP_SEQUENCE_L_P ] = 0;
 	icmp_id++;
 	icmp_seq++;
-	icmp_generate_packet ( rxtx_buffer, length );	
+	icmp_generate_packet ( rxtx_buffer, length );
 
 	// send packet to ethernet media
 	enc28j60_packet_send ( rxtx_buffer, sizeof(ETH_HEADER) + sizeof(IP_HEADER) + sizeof(ICMP_HEADER) + length );
@@ -120,12 +123,12 @@ void icmp_send_request ( BYTE *rxtx_buffer, unsigned char length, BYTE *dest_mac
 //*******************************************************************************************
 BYTE icmp_send_reply ( BYTE *rxtx_buffer, unsigned short length, BYTE *dest_mac, BYTE *dest_ip )
 {
-	
+
 	// check protocol is icmp or not?
 	if ( rxtx_buffer [ IP_PROTO_P ] != IP_PROTO_ICMP_V ){
 		return 0;
 	}
-	
+
 	// check icmp packet type is echo request or not?
 	if ( rxtx_buffer [ ICMP_TYPE_P ] != ICMP_TYPE_ECHOREQUEST_V ){
 		return 0;
@@ -133,7 +136,7 @@ BYTE icmp_send_reply ( BYTE *rxtx_buffer, unsigned short length, BYTE *dest_mac,
 
 	// set ethernet header
 	eth_generate_header ( rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, dest_mac );
-	
+
   // generate ip header and checksum
 	ip_generate_header ( rxtx_buffer, (WORD_BYTES){(rxtx_buffer[IP_TOTLEN_H_P]<<8)|rxtx_buffer[IP_TOTLEN_L_P]}, IP_PROTO_ICMP_V, dest_ip );
 
@@ -155,7 +158,7 @@ BYTE icmp_send_reply ( BYTE *rxtx_buffer, unsigned short length, BYTE *dest_mac,
 {
 	BYTE i;
 	WORD dlength;
-	
+
 	// destination ip was not found on network.
 	if ( arp_who_is ( rxtx_buffer, dest_mac, dest_ip ) == 0 )
 		return 0;
@@ -173,7 +176,7 @@ BYTE icmp_send_reply ( BYTE *rxtx_buffer, unsigned short length, BYTE *dest_mac,
 			// check protocol is icmp or not?
 			if ( rxtx_buffer [ IP_PROTO_P ] != IP_PROTO_ICMP_V )
 				continue;
-	
+
 			// check icmp packet type is echo reply or not?
 			if ( rxtx_buffer [ ICMP_TYPE_P ] != ICMP_TYPE_ECHOREPLY_V )
 				continue;
