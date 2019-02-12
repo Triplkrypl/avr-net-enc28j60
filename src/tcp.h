@@ -39,6 +39,7 @@
 
 #define TCP_MIN_DINAMIC_PORT 49152
 #define TCP_MAX_PORT 65535
+#define TCP_MAX_SEGMENT_SIZE (MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN - TCP_HEADER_LEN)
 
 #define TCP_FLAG_FIN_V		0x01
 #define TCP_FLAG_SYN_V		0x02
@@ -49,8 +50,14 @@
 #define TCP_FLAG_ECE_V		0x40
 #define TCP_FLAG_CWR_V		0x80
 
+#define TCP_OPTION_END_LIST_KIND        0
+#define TCP_OPTION_NO_OPERATION_KIND    1
+#define TCP_OPTION_MAX_SEGMET_SIZE_KIND 2
+
+#define TCP_SRC_PORT_P 	    0x22
 #define TCP_SRC_PORT_H_P 	0x22
 #define TCP_SRC_PORT_L_P 	0x23
+#define TCP_DST_PORT_P 	    0x24
 #define TCP_DST_PORT_H_P 	0x24
 #define TCP_DST_PORT_L_P 	0x25
 #define TCP_SEQ_P  			0x26	// the tcp seq number is 4 bytes 0x26-0x29
@@ -71,6 +78,7 @@ typedef struct{
  unsigned long expectedSequence;
  unsigned short port;
  unsigned short remotePort;
+ unsigned short maxSegmetSize;
  unsigned char state;
  unsigned char ip[IP_V4_ADDRESS_SIZE];
  unsigned char mac[MAC_ADDRESS_SIZE];

@@ -115,7 +115,7 @@ unsigned short software_checksum(unsigned char *rxtx_buffer, unsigned short len,
 }
 
 unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type){
- return ( rxtx_buffer[ ETH_TYPE_H_P ] == high(type) && rxtx_buffer[ ETH_TYPE_L_P ] == low(type));
+ return ( rxtx_buffer[ ETH_TYPE_H_P ] == High(type) && rxtx_buffer[ ETH_TYPE_L_P ] == Low(type));
 }
 
 // toto pridat komentar

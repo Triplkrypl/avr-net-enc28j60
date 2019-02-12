@@ -199,13 +199,13 @@ typedef struct _TCP_HEADER
 	WORD_BYTES	dest_port;
 	DWORD_BYTES	sequence_number;
 	DWORD_BYTES	seqack_number;
-	
+
 	union
 	{
 		struct
 		{
 			unsigned char reserved:4;
-			unsigned char value:4;			
+			unsigned char value:4;
 		}nibble;
 		unsigned char byte;
 	}data_offset;
@@ -213,14 +213,14 @@ typedef struct _TCP_HEADER
 	union
 	{
 		struct
-		{			
+		{
 			unsigned char FIN:1;
 			unsigned char SYN:1;
 			unsigned char RST:1;
 			unsigned char PSH:1;
 			unsigned char ACK:1;
 			unsigned char URG:1;
-			unsigned char reserved:2;			
+			unsigned char reserved:2;
 		} bits;
 		unsigned char byte;
 	} flags;
@@ -228,13 +228,6 @@ typedef struct _TCP_HEADER
 	WORD_BYTES	checksum;
 	WORD_BYTES	urgent_pointer;
 } TCP_HEADER;
-
-typedef struct _TCP_OPTION
-{
-	BYTE		kind;
-	BYTE		length;
-	WORD_BYTES	max_seg_size;
-} TCP_OPTION;
 
 typedef struct _UDP_HEADER
 {
