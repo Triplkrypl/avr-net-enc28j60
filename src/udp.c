@@ -24,9 +24,13 @@
 // http://www.gnu.de/gpl-ger.html
 //
 //********************************************************************************************
-#include "udp.h"
+#include <string.h>
+#include <stdio.h> //todo vyhodit testovaci kod
+#include "enc28j60.h"
 #include "ethernet.h"
 #include "ip.h"
+#include "udp.h"
+#include "util.c"
 //
 //********************************************************************************************
 // The User Datagram Protocol offers only a minimal transport service
@@ -63,73 +67,59 @@
 // Description : generate udp header
 //
 //********************************************************************************************
-void udp_generate_header ( BYTE *rxtx_buffer, unsigned short source_port, WORD_BYTES dest_port, WORD_BYTES length )
-{
-	WORD_BYTES ck;
-
-	// setup source port
-	rxtx_buffer[UDP_SRC_PORT_H_P] = *((unsigned char *)(&source_port));
-	rxtx_buffer[UDP_SRC_PORT_L_P] = *(((unsigned char *)(&source_port))+1);
-
-	// setup destination port
-	rxtx_buffer[UDP_DST_PORT_H_P] = dest_port.byte.high;
-	rxtx_buffer[UDP_DST_PORT_L_P] = dest_port.byte.low;
-
-	// setup udp length
-	rxtx_buffer[UDP_LENGTH_H_P] = length.byte.high;
-	rxtx_buffer[UDP_LENGTH_L_P] = length.byte.low;
-
-	// setup udp checksum
-	rxtx_buffer[UDP_CHECKSUM_H_P] = 0;
-	rxtx_buffer[UDP_CHECKSUM_L_P] = 0;
-	// length+8 for source/destination IP address length (8-bytes)
-	ck.word = software_checksum ( (BYTE*)&rxtx_buffer[IP_SRC_IP_P], length.word+8, length.word+IP_PROTO_UDP_V);
-	rxtx_buffer[UDP_CHECKSUM_H_P] = ck.byte.high;
-	rxtx_buffer[UDP_CHECKSUM_L_P] = ck.byte.low;
+static void UdpGenerateHeader(unsigned char *buffer, const unsigned short sourcePort, const unsigned short destPort, const unsigned short length){
+ // setup source port
+ buffer[UDP_SRC_PORT_H_P] = ((unsigned char*)&sourcePort)[1];
+ buffer[UDP_SRC_PORT_L_P] = ((unsigned char*)&sourcePort)[0];
+ // setup destination port
+ buffer[UDP_DST_PORT_H_P] = ((unsigned char*)&destPort)[1];
+ buffer[UDP_DST_PORT_L_P] = ((unsigned char*)&destPort)[0];
+ // setup udp length
+ buffer[UDP_LENGTH_H_P] = ((unsigned char*)&length)[1];
+ buffer[UDP_LENGTH_L_P] = ((unsigned char*)&length)[0];
+ // setup udp checksum
+ buffer[UDP_CHECKSUM_H_P] = 0;
+ buffer[UDP_CHECKSUM_L_P] = 0;
+ // length+8 for source/destination IP address length (8-bytes)
+ CharsPutShort(buffer + UDP_CHECKSUM_P, software_checksum(buffer + IP_SRC_IP_P, length + 8, length + IP_PROTO_UDP_V));
 }
+
 //********************************************************************************************
 //
-// Function : udp_puts_data
-// Description : puts data from RAM to UDP tx buffer
+// Function : UdpSend
+// Description : send upd data into network
 //
 //********************************************************************************************
-WORD udp_puts_data ( BYTE *rxtx_buffer, BYTE *data, WORD offset, unsigned short length ){
- unsigned short i;
- for(i=0; i<length; i++){
-  rxtx_buffer[ UDP_DATA_P + offset ] = data[i];
-	offset++;
+unsigned char UdpSend(unsigned char* buffer, const unsigned char* mac, const unsigned char *ip, const unsigned short port, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength){
+ if(dataLength + ETH_HEADER_LEN + IP_HEADER_LEN + UDP_HEADER_LEN + dataLength > MAX_TX_BUFFER){
+  return 0;
  }
- return offset;
-}
-
-BYTE udp_is_udp ( BYTE *rxtx_buffer, unsigned short dest_port, unsigned short *source_port )
-{
-	// check UDP packet
-	if ( rxtx_buffer[IP_PROTO_P] != IP_PROTO_UDP_V ){
-		return 0;
-	}
-
-	// check destination port
-	if(rxtx_buffer[UDP_DST_PORT_H_P] != ((unsigned char*)&dest_port)[1] || rxtx_buffer[ UDP_DST_PORT_L_P ] != ((unsigned char*)&dest_port)[0]){
-   return 0;
-  }
-
-  ((unsigned char *)source_port)[1] = rxtx_buffer[UDP_SRC_PORT_H_P];
-  ((unsigned char *)source_port)[0] = rxtx_buffer[UDP_SRC_PORT_L_P];
-
-	return 1;
-}
-
-void udp_send(unsigned char* rxtx_buffer, unsigned short source_port, unsigned char* dest_mac, unsigned char *dest_ip, unsigned short dest_port, unsigned short data_length){
- // set ethernet header
- eth_generate_header (rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, dest_mac );
-
- // generate ip header and checksum
- ip_generate_header (rxtx_buffer, (WORD_BYTES){sizeof(IP_HEADER)+sizeof(UDP_HEADER)+data_length}, IP_PROTO_UDP_V, dest_ip );
-
- // generate UDP header
- udp_generate_header (rxtx_buffer, source_port, (WORD_BYTES){dest_port}, (WORD_BYTES){sizeof(UDP_HEADER)+data_length});
-
+ eth_generate_header(buffer, (WORD_BYTES){ETH_TYPE_IP_V}, mac);
+ ip_generate_header(buffer, (WORD_BYTES){IP_HEADER_LEN + UDP_HEADER_LEN+dataLength}, IP_PROTO_UDP_V, ip);
+ memcpy(buffer + UDP_DATA_P, data, dataLength);
+ UdpGenerateHeader(buffer, port, remotePort, UDP_HEADER_LEN + dataLength);
  // send packet to ethernet media
- enc28j60_packet_send ( rxtx_buffer, sizeof(ETH_HEADER)+sizeof(IP_HEADER)+sizeof(UDP_HEADER)+data_length );
+ enc28j60_packet_send(buffer, ETH_HEADER_LEN + IP_HEADER_LEN + UDP_HEADER_LEN + dataLength);
+ return 1;
+}
+
+// todo vyhodit testovaci kod
+//********************************************************************************************
+//
+// Function : UdpHandleIncomingPacket
+// Description : hand incoming udp packet form network
+//
+//********************************************************************************************
+void UdpHandleIncomingPacket(unsigned char *buffer, unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]){
+ length = CharsToShort(buffer + UDP_LENGTH_P) - UDP_HEADER_LEN;
+ char out[100];
+ sprintf(out, "UDP Delka dat %u\n", length);
+ UARTWriteChars(out);
+ sprintf(out, "UDP Port %u remote port %u\n", CharsToShort(buffer + UDP_DST_PORT_H_P), CharsToShort(buffer + UDP_SRC_PORT_H_P));
+ UARTWriteChars(out);
+ UARTWriteChars("UDP Prichozi data '");
+ UARTWriteCharsLength(buffer + UDP_DATA_P, length);
+ UARTWriteChars("'\n");
+ UdpSend(buffer, srcMac, srcIp, CharsToShort(buffer + UDP_DST_PORT_H_P), CharsToShort(buffer + UDP_SRC_PORT_H_P), buffer + UDP_DATA_P, length);
+ //todo pridani callbacku na prichozi packaket
 }

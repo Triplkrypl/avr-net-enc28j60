@@ -131,25 +131,13 @@ typedef union _DWORD_BYTE
     } bits;
 } DWORD_BYTES;
 
-// mac address structure
-typedef struct _MAC_ADDR
-{
-    BYTE byte[6];
-}MAC_ADDR;
-
 // ethernet header structure
 typedef struct _ETH_HEADER
 {
-	MAC_ADDR	dest_mac;
-	MAC_ADDR	src_mac;
+	BYTE	dest_mac[6];
+	BYTE	src_mac[6];
 	WORD_BYTES	type;
 }ETH_HEADER;
-
-// IP address structure
-typedef struct _IP_ADDR
-{
-	BYTE byte[4];
-}IP_ADDR;
 
 // IP header structure
 typedef struct _IP_HEADER
@@ -162,8 +150,8 @@ typedef struct _IP_HEADER
 	BYTE		time_to_live;
 	BYTE		protocol;
 	WORD_BYTES	checksum;
-	IP_ADDR		src_ip;
-	IP_ADDR		dest_ip;
+	BYTE		src_ip[4];
+	BYTE		dest_ip[4];
 
 }IP_HEADER;
 
@@ -175,10 +163,10 @@ typedef struct _ARP_PACKET
 	BYTE		hardware_length;
 	BYTE		protocol_length;
 	WORD_BYTES	opcode;
-	MAC_ADDR	src_mac;
-	IP_ADDR		src_ip;
-	MAC_ADDR	dest_mac;
-	IP_ADDR		dest_ip;
+	BYTE	src_mac[6];
+	BYTE		src_ip[4];
+	BYTE	dest_mac[6];
+	BYTE		dest_ip[4];
 } ARP_PACKET;
 
 // ICMP packet structure
@@ -192,75 +180,4 @@ typedef struct _ICMP_HEADER
 	WORD_BYTES	sequence_number;
 } ICMP_HEADER;
 
-// TCP Header
-typedef struct _TCP_HEADER
-{
-	WORD_BYTES	src_port;
-	WORD_BYTES	dest_port;
-	DWORD_BYTES	sequence_number;
-	DWORD_BYTES	seqack_number;
-
-	union
-	{
-		struct
-		{
-			unsigned char reserved:4;
-			unsigned char value:4;
-		}nibble;
-		unsigned char byte;
-	}data_offset;
-
-	union
-	{
-		struct
-		{
-			unsigned char FIN:1;
-			unsigned char SYN:1;
-			unsigned char RST:1;
-			unsigned char PSH:1;
-			unsigned char ACK:1;
-			unsigned char URG:1;
-			unsigned char reserved:2;
-		} bits;
-		unsigned char byte;
-	} flags;
-	WORD_BYTES	window;
-	WORD_BYTES	checksum;
-	WORD_BYTES	urgent_pointer;
-} TCP_HEADER;
-
-typedef struct _UDP_HEADER
-{
-	WORD	src_port;
-	WORD	dst_port;
-	WORD	length;
-	WORD	checksum;
-} UDP_HEADER;
-
-union flag1
-{
-	BYTE byte;
-	struct
-	{
-		unsigned char key_is_executed:1;
-		unsigned char update_display:1;
-		unsigned char lcd_busy:1;
-		unsigned char key_press:1;
-		unsigned char send_temp:1;
-		unsigned char syn_is_sent:1;
-		unsigned char syn_is_received:1;
-		unsigned char send_temp_timeout:1;
-	}bits;
-}flag1;
-
-union flag2
-{
-	BYTE byte;
-	struct
-	{
-		unsigned char key_hold:1;
-		unsigned char software_reset:1;
-		unsigned char unuse:6;
-	}bits;
-}flag2;
 #endif

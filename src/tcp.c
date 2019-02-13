@@ -25,12 +25,13 @@
 //
 //********************************************************************************************
 #include <string.h>
-#include <stdio.h>
+#include <stdio.h> //todo vyhodit testovaci kod
 #include "arp.h"
 #include "tcp.h"
 #include "ip.h"
 #include "ethernet.h"
 #include "network.h"
+#include "util.c"
 //********************************************************************************************
 //
 // +------------+-----------+------------+----------+
@@ -105,31 +106,13 @@ unsigned short TcpGetDataLength(unsigned char *rxtx_buffer){
 	int dlength, hlength;
 
 	dlength = ( rxtx_buffer[ IP_TOTLEN_H_P ] <<8 ) | ( rxtx_buffer[ IP_TOTLEN_L_P ] );
-	dlength -= sizeof(IP_HEADER);
+	dlength -= IP_HEADER_LEN;
 	hlength = TcpGetHeaderLength(rxtx_buffer);
 	dlength -= hlength;
 	if ( dlength <= 0 )
 		dlength=0;
 
 	return dlength;
-}
-
-//*****************************************************************************************
-//
-// Function : TcpGetSequence
-// Description : get sequence and acknowledgment number from packet string
-//
-//*****************************************************************************************
-static inline void TcpGetSequence(const unsigned char *buffer, unsigned long *seq, unsigned long *ack){
- ((unsigned char*)seq)[0] = buffer[TCP_SEQ_P + 3];
- ((unsigned char*)seq)[1] = buffer[TCP_SEQ_P + 2];
- ((unsigned char*)seq)[2] = buffer[TCP_SEQ_P + 1];
- ((unsigned char*)seq)[3] = buffer[TCP_SEQ_P];
-
- ((unsigned char*)ack)[0] = buffer[TCP_SEQACK_P + 3];
- ((unsigned char*)ack)[1] = buffer[TCP_SEQACK_P + 2];
- ((unsigned char*)ack)[2] = buffer[TCP_SEQACK_P + 1];
- ((unsigned char*)ack)[3] = buffer[TCP_SEQACK_P];
 }
 
 //*****************************************************************************************
@@ -162,17 +145,6 @@ static inline void TcpSetPort(unsigned char *buffer, const unsigned short destin
 
  buffer[TCP_SRC_PORT_H_P] = ((unsigned char*)&source)[1];
  buffer[TCP_SRC_PORT_L_P] = *((unsigned char*)&source);
-}
-
-//*****************************************************************************************
-//
-// Function : TcpSetChecksum
-// Description : write checksum into packet string
-//
-//*****************************************************************************************
-static inline void TcpSetChecksum(unsigned char *buffer, const unsigned short checksum){
- buffer[TCP_CHECKSUM_H_P] = ((unsigned char*)&checksum)[1];
- buffer[TCP_CHECKSUM_L_P] = *((unsigned char*)&checksum);
 }
 
 //********************************************************************************************
@@ -226,9 +198,9 @@ static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connec
  // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
  // +           0           +      IP Protocol      +                    Total length               +
  // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
- TcpSetChecksum(rxtx_buffer, software_checksum(rxtx_buffer + IP_SRC_IP_P, sizeof(TCP_HEADER)+dlength+8, IP_PROTO_TCP_V + sizeof(TCP_HEADER) + dlength));
+ CharsPutShort(rxtx_buffer + TCP_CHECKSUM_H_P, software_checksum(rxtx_buffer + IP_SRC_IP_P, TCP_HEADER_LEN + dlength + 8, IP_PROTO_TCP_V + TCP_HEADER_LEN + dlength));
  // send packet to ethernet media
- enc28j60_packet_send(rxtx_buffer, sizeof(ETH_HEADER)+sizeof(IP_HEADER)+sizeof(TCP_HEADER)+dlength);
+ enc28j60_packet_send(rxtx_buffer, ETH_HEADER_LEN + IP_HEADER_LEN + TCP_HEADER_LEN + dlength);
 }
 
 //********************************************************************************************
@@ -364,8 +336,8 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
  unsigned short length = EthWaitPacket(buffer, ETH_TYPE_IP_V, 0);
  if(length != 0){
   if(ip_packet_is_ip(buffer) && TcpIsTcp(buffer)){
-   unsigned long seq, ack;
-   TcpGetSequence(buffer, &seq, &ack);
+   unsigned long seq = CharsToLong(buffer + TCP_SEQ_P);
+   unsigned long ack = CharsToLong(buffer + TCP_SEQACK_P);
    if(
     TcpIsConnection(*connection, buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P)) &&
     (buffer[ TCP_FLAGS_P ] & expectedFlag) &&
@@ -565,103 +537,83 @@ unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connection
  return 1;
 }
 
-// todo odebrat testovaci kod a recator nazvu promenych
+// todo odebrat testovaci kod
 //********************************************************************************************
 //
 // Function : TcpHandleIncomingPacket
 // Description : function will passive processed any incoming tcp packet
 //
 //********************************************************************************************
-void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]){
+void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]){
  char out[100];
- unsigned char conID = TcpGetConnectionId(srcMac, srcIp, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P), buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V);
- if(conID == TCP_INVALID_CONNECTION_ID){
+ unsigned char conId = TcpGetConnectionId(srcMac, srcIp, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P), buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V);
+ if(conId == TCP_INVALID_CONNECTION_ID){
   return;
  }
- unsigned long seq, ack;
- TcpGetSequence(buffer, &seq, &ack);
- unsigned short data_length = TcpGetDataLength(buffer);
- sprintf(out, "Id conID %u state %u port %u remote port %u\n", conID, connections[conID].state, connections[conID].port, connections[conID].remotePort);
+ sprintf(out, "Id conId %u state %u port %u remote port %u\n", conId, connections[conId].state, connections[conId].port, connections[conId].remotePort);
  UARTWriteChars(out);
- sprintf(out, "Sec %lu\n", seq);
+ sprintf(out, "Sec conection %lu\n", connections[conId].sendSequence);
  UARTWriteChars(out);
- sprintf(out, "Ack %lu\n", ack);
+ sprintf(out, "Expected Sec conection %lu\n", connections[conId].expectedSequence);
  UARTWriteChars(out);
- sprintf(out, "Sec conection %lu\n", connections[conID].sendSequence);
+ sprintf(out, "Max segmet size %u\n", connections[conId].maxSegmetSize);
  UARTWriteChars(out);
- sprintf(out, "Expected Sec conection %lu\n", connections[conID].expectedSequence);
- UARTWriteChars(out);
- sprintf(out, "Max segmet size %u\n", connections[conID].maxSegmetSize);
- UARTWriteChars(out);
- sprintf(out, "Delka dat %u\n", data_length);
- UARTWriteChars(out);
- if((buffer[ TCP_FLAGS_P ] == TCP_FLAG_SYN_V) && (connections[conID].state == TCP_STATE_NEW || connections[conID].state == TCP_STATE_SYN_RECEIVED)){
-  if(connections[conID].state == TCP_STATE_NEW){
-   if(connections[conID].port != 80){
-    connections[conID].state = TCP_STATE_NO_CONNECTION;
+ if((buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V) && (connections[conId].state == TCP_STATE_NEW || connections[conId].state == TCP_STATE_SYN_RECEIVED)){
+  if(connections[conId].state == TCP_STATE_NEW){
+   if(connections[conId].port != 80){
+    connections[conId].state = TCP_STATE_NO_CONNECTION;
     return;// todo neocekavany prichozi port zatim dropujem, vyresit icmp s odmitnutim
    }
    // todo pridani callbacku nove spojeni
   }
-  connections[conID].state = TCP_STATE_SYN_RECEIVED;
-  connections[conID].expectedSequence = seq + 1;
-  connections[conID].sendSequence = 2;
+  connections[conId].state = TCP_STATE_SYN_RECEIVED;
+  connections[conId].expectedSequence = CharsToLong(buffer + TCP_SEQ_P) + 1;
+  connections[conId].sendSequence = 2;
   unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
-  connections[conID].maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
+  connections[conId].maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
   sprintf(out, "SYN packet\n");
   UARTWriteChars(out);
-  TcpSendPacket(buffer, connections[conID], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
+  TcpSendPacket(buffer, connections[conId], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
   return;
  }
- if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && connections[conID].state == TCP_STATE_SYN_RECEIVED){
+ if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && connections[conId].state == TCP_STATE_SYN_RECEIVED){
   sprintf(out, "Established packet\n");
   UARTWriteChars(out);
-  connections[conID].state = TCP_STATE_ESTABLISHED;
-  connections[conID].sendSequence = ack;
+  connections[conId].state = TCP_STATE_ESTABLISHED;
+  connections[conId].sendSequence = CharsToLong(buffer + TCP_SEQACK_P);
  }
- if((buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && (connections[conID].state == TCP_STATE_ESTABLISHED || connections[conID].state == TCP_STATE_DYEING)){
-  if(!TcpSendAck(buffer, connections + conID, seq, 1)){
+ // handle connection close
+ if((buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && (connections[conId].state == TCP_STATE_ESTABLISHED || connections[conId].state == TCP_STATE_DYEING)){
+  if(!TcpSendAck(buffer, connections + conId, CharsToLong(buffer + TCP_SEQ_P), 1)){
    return;
   }
   sprintf(out, "Zadost o konec \n");
   UARTWriteChars(out);
-  connections[conID].state = TCP_STATE_DYEING;
+  connections[conId].state = TCP_STATE_DYEING;
   // todo pridat callback na ukoncene spojeni
-  TcpClose(buffer, connections + conID, 900);
-  connections[conID].state = TCP_STATE_NO_CONNECTION;
+  TcpClose(buffer, connections + conId, 900);
+  connections[conId].state = TCP_STATE_NO_CONNECTION;
   sprintf(out, "Konec\n");
   UARTWriteChars(out);
  }
- if(connections[conID].state != TCP_STATE_ESTABLISHED){
+ if(connections[conId].state != TCP_STATE_ESTABLISHED){
   return;
  }
- if(data_length == 0){
+ length = TcpGetDataLength(buffer);
+ sprintf(out, "Delka dat %u\n", length);
+ UARTWriteChars(out);
+ // handle incoming data packet
+ if(length == 0){
   return;
  }
- if(!TcpSendAck(buffer, connections + conID, seq, data_length)){
+ if(!TcpSendAck(buffer, connections + conId, CharsToLong(buffer + TCP_SEQ_P), length)){
   return;
  }
  // todo pridani callbacku na prichozi data
  UARTWriteChars("Prichozi data '");
- UARTWriteCharsLength(buffer + TcpGetDataPosition(buffer), data_length);
+ UARTWriteCharsLength(buffer + TcpGetDataPosition(buffer), length);
  UARTWriteChars("'\n");
 
- unsigned char data[400]; unsigned short i,j;
- for(i=0,j=0; i<400; i++){
-  data[i] = buffer[TcpGetDataPosition(buffer) + j];
-  j++;
-  if(j>=data_length){
-   j=0;
-  }
- }
- if(TcpSendData(buffer, conID, 5000, data, 400)){
-  UARTWriteChars("Odchozi data OK\n");
- }
-
- unsigned char testConnectIp[IP_V4_ADDRESS_SIZE] = {192, 168, 0, 30};
- unsigned char testConnectionId = TcpConnect(buffer, testConnectIp, 800, 2000);
- sprintf(out, "Nove spojeni %u\n", testConnectionId);
- UARTWriteChars(out);
-
+ TcpSendData(buffer, conId, 5000, buffer + TcpGetDataPosition(buffer), length);
  return;
 }

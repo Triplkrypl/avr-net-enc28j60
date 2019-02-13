@@ -27,17 +27,20 @@
 //
 //********************************************************************************************
 
+#define UDP_HEADER_LEN      8
+
 #define UDP_SRC_PORT_H_P	0x22
 #define UDP_SRC_PORT_L_P	0x23
 #define UDP_DST_PORT_H_P	0x24
 #define UDP_DST_PORT_L_P	0x25
+#define UDP_LENGTH_P		0x26
 #define UDP_LENGTH_H_P		0x26
 #define UDP_LENGTH_L_P		0x27
+#define UDP_CHECKSUM_P	    0x28
 #define UDP_CHECKSUM_H_P	0x28
 #define UDP_CHECKSUM_L_P	0x29
 #define UDP_DATA_P			0x2A
 
-extern WORD udp_puts_data ( BYTE *rxtx_buffer, BYTE *data, WORD offset, unsigned short length );
-extern BYTE udp_is_udp ( BYTE *rxtx_buffer, unsigned short dest_port, unsigned short *source_port);
-extern void udp_send(unsigned char* rxtx_buffer, unsigned short source_port, unsigned char* dest_mac, unsigned char *dest_ip, unsigned short dest_port,  unsigned short data_length);
+unsigned char UdpSend(unsigned char* buffer, const unsigned char* mac, const unsigned char *ip, const unsigned short port, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength);
+void UdpHandleIncomingPacket(unsigned char *buffer, const unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]);
 #endif
