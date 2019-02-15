@@ -6,8 +6,13 @@
 #include "ip.c"
 #include "network.h"
 
+#if defined(TCP) || defined(UDP)
+unsigned short connectPortRotaiting = NET_MIN_DINAMIC_PORT;
+#endif
+
 void NetInit() {
  enc28j60_init();
+ ArpInit();
  #ifdef TCP
  TcpInit();
  #endif
@@ -26,7 +31,7 @@ void NetHandleNetwork(){
 void NetHandleIncomingPacket(unsigned char *buffer, unsigned short length){
  unsigned char srcMac[MAC_ADDRESS_SIZE];
  memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
- if(arp_packet_is_arp(buffer, ARP_OPCODE_REQUEST_V)){//todo arp cache
+ if(arp_packet_is_arp(buffer, ARP_OPCODE_REQUEST_V)){
   arp_send_reply(buffer, srcMac);
   return;
  }

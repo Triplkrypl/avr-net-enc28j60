@@ -114,20 +114,20 @@ unsigned short software_checksum(unsigned char *rxtx_buffer, unsigned short len,
 	return( (WORD) sum ^ 0xFFFF);
 }
 
-unsigned char ethCheckType(unsigned char *rxtx_buffer, unsigned short type){
+unsigned char EthCheckType(const unsigned char *rxtx_buffer, const unsigned short type){
  return ( rxtx_buffer[ ETH_TYPE_H_P ] == High(type) && rxtx_buffer[ ETH_TYPE_L_P ] == Low(type));
 }
 
 // toto pridat komentar
-unsigned char EthWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short timeout){
+unsigned short EthWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short timeout){
  unsigned short length;
  unsigned char microWaiting = 0;
  unsigned short waiting = 0;
  for(;;){
   _delay_us(100);
-  length = enc28j60_packet_receive(rxtx_buffer, 400);// todo nastavit velikost bufferu konstantou
+  length = enc28j60_packet_receive(rxtx_buffer, NET_BUFFER_SIZE);
   if(length != 0){
-   if(ethCheckType(rxtx_buffer, type) && memcmp(rxtx_buffer + ETH_DST_MAC_P, avr_mac, MAC_ADDRESS_SIZE) == 0){
+   if(EthCheckType(rxtx_buffer, type) && memcmp(rxtx_buffer + ETH_DST_MAC_P, avr_mac, MAC_ADDRESS_SIZE) == 0){
     return length;
    }
    NetHandleIncomingPacket(rxtx_buffer, length);

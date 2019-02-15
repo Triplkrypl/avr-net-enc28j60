@@ -69,7 +69,27 @@
 // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 //
 //********************************************************************************************
-unsigned char avr_ip[IP_V4_ADDRESS_SIZE] = {NET_IP};
+
+unsigned char avrIp[IP_V4_ADDRESS_SIZE] = {NET_IP};
+#if NET_ARP_CACHE_SIZE > 0
+static unsigned char arpCache[NET_ARP_CACHE_SIZE][MAC_ADDRESS_SIZE + IP_V4_ADDRESS_SIZE + 1];
+#endif
+
+
+//********************************************************************************************
+//
+// Function : ArpInit
+// Description : initialization of memory
+//
+//********************************************************************************************
+void ArpInit(){
+ #if NET_ARP_CACHE_SIZE > 0
+ unsigned char i;
+ for(i=0; i<NET_ARP_CACHE_SIZE; i++){
+  arpCache[i][ARP_CACHE_USE_COUNT_P] = 0;
+ }
+ #endif
+}
 
 //********************************************************************************************
 //
@@ -77,7 +97,7 @@ unsigned char avr_ip[IP_V4_ADDRESS_SIZE] = {NET_IP};
 // Description : generate arp packet
 //
 //********************************************************************************************
-void arp_generate_packet( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned char *dest_ip ){
+static void arp_generate_packet( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned char *dest_ip ){
  // setup hardware type to ethernet 0x0001
  rxtx_buffer[ ARP_HARDWARE_TYPE_H_P ] = ARP_HARDWARE_TYPE_H_V;
  rxtx_buffer[ ARP_HARDWARE_TYPE_L_P ] = ARP_HARDWARE_TYPE_L_V;
@@ -93,16 +113,16 @@ void arp_generate_packet( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned char
  memcpy(rxtx_buffer + ARP_SRC_MAC_P, avr_mac, MAC_ADDRESS_SIZE);
  // setup arp destination and source ip address
  memcpy(rxtx_buffer + ARP_DST_IP_P, dest_ip, IP_V4_ADDRESS_SIZE);
- memcpy(rxtx_buffer + ARP_SRC_IP_P, avr_ip, IP_V4_ADDRESS_SIZE);
+ memcpy(rxtx_buffer + ARP_SRC_IP_P, avrIp, IP_V4_ADDRESS_SIZE);
 }
+
 //********************************************************************************************
 //
 // Function : arp_send_request
 // Description : send arp request packet (who is?) to network.
 //
 //********************************************************************************************
-void arp_send_request ( BYTE *rxtx_buffer, const unsigned char *dest_ip )
-{
+static void arp_send_request ( BYTE *rxtx_buffer, const unsigned char *dest_ip ){
 	unsigned char i;
 	unsigned char destMac[MAC_ADDRESS_SIZE];
 
@@ -123,35 +143,28 @@ void arp_send_request ( BYTE *rxtx_buffer, const unsigned char *dest_ip )
 	arp_generate_packet(rxtx_buffer, destMac, dest_ip);
 
 	// send arp packet to network
-	enc28j60_packet_send(rxtx_buffer, ETH_HEADER_LEN + sizeof(ARP_PACKET));
+	enc28j60_packet_send(rxtx_buffer, ETH_HEADER_LEN + ARP_V4_PACKET_LEN);
 }
+
 //*******************************************************************************************
 //
 // Function : arp_packet_is_arp
 // Description : check received packet, that packet is match with arp and avr ip or not?
 //
 //*******************************************************************************************
-BYTE arp_packet_is_arp(BYTE *rxtx_buffer, unsigned short opcode)
-{
-	// if packet type is not arp packet exit from function
-	if( rxtx_buffer[ ETH_TYPE_H_P ] != ETH_TYPE_ARP_H_V || rxtx_buffer[ ETH_TYPE_L_P ] != ETH_TYPE_ARP_L_V){
-	 return 0;
-  }
-
-	// check arp request opcode
-	if ( rxtx_buffer[ ARP_OPCODE_H_P ] != ((unsigned char *)&opcode)[1] || rxtx_buffer[ ARP_OPCODE_L_P ] != ((unsigned char *)&opcode)[0] ){
-   return 0;
-  }
-  // if destination ip address in arp packet not match with avr ip address
-  unsigned char i;
-	for ( i=0; i<4; i++ )
-	{
-		if ( rxtx_buffer[ ARP_DST_IP_P + i] != avr_ip[i] ){
-		 return 0;
-    }
-	}
-	return 1;
+unsigned char arp_packet_is_arp(unsigned char *rxtx_buffer, unsigned short opcode){
+ // if packet type is not arp packet exit from function
+ if( rxtx_buffer[ ETH_TYPE_H_P ] != ETH_TYPE_ARP_H_V || rxtx_buffer[ ETH_TYPE_L_P ] != ETH_TYPE_ARP_L_V){
+  return 0;
+ }
+ // check arp request opcode
+ if ( rxtx_buffer[ ARP_OPCODE_H_P ] != ((unsigned char *)&opcode)[1] || rxtx_buffer[ ARP_OPCODE_L_P ] != ((unsigned char *)&opcode)[0]){
+  return 0;
+ }
+ // if destination ip address in arp packet not match with avr ip address
+ return memcmp(rxtx_buffer + ARP_DST_IP_P, avrIp, IP_V4_ADDRESS_SIZE) == 0;
 }
+
 //*******************************************************************************************
 //
 // Function : arp_send_reply
@@ -169,7 +182,7 @@ void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac )
 	arp_generate_packet ( rxtx_buffer, dest_mac, &rxtx_buffer[ ARP_SRC_IP_P ] );
 
 	// send arp packet
-	enc28j60_packet_send ( rxtx_buffer, sizeof(ETH_HEADER) + sizeof(ARP_PACKET) );
+	enc28j60_packet_send ( rxtx_buffer, ETH_HEADER_LEN + ARP_V4_PACKET_LEN);
 }
 
 //*******************************************************************************************
@@ -179,18 +192,46 @@ void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac )
 // call this function to find the destination mac address before send other packet.
 //
 //*******************************************************************************************
-unsigned char ArpWhoIs (unsigned char *rxtx_buffer, const unsigned char *dest_ip, unsigned char *dest_mac){
+unsigned char ArpWhoIs(unsigned char *buffer, const unsigned char destIp[IP_V4_ADDRESS_SIZE], unsigned char destMac[MAC_ADDRESS_SIZE]){
  unsigned short dlength;
-
- arp_send_request(rxtx_buffer, dest_ip );
- dlength = EthWaitPacket(rxtx_buffer, ETH_TYPE_ARP_V, 100);
+ unsigned char i, found = 0, minUseCacheId = 0;
+ #if NET_ARP_CACHE_SIZE > 0
+ // try found mac address in cache
+ for(i=0; i<NET_ARP_CACHE_SIZE; i++){
+  if(!found && arpCache[i][ARP_CACHE_USE_COUNT_P] && memcmp(arpCache[i] + ARP_CACHE_IP_P, destIp, IP_V4_ADDRESS_SIZE) == 0){
+   memcpy(destMac, arpCache[i] + ARP_CACHE_MAC_P, MAC_ADDRESS_SIZE);
+   arpCache[i][ARP_CACHE_USE_COUNT_P] = (255 - arpCache[i][ARP_CACHE_USE_COUNT_P] >= 2) ? arpCache[i][ARP_CACHE_USE_COUNT_P] + 2 : 255;
+   found = 1;
+   continue;
+  }
+  if(arpCache[i][ARP_CACHE_USE_COUNT_P]){
+   arpCache[i][ARP_CACHE_USE_COUNT_P]--;
+  }
+  if(arpCache[minUseCacheId][ARP_CACHE_USE_COUNT_P] < arpCache[i][ARP_CACHE_USE_COUNT_P]){
+   minUseCacheId = i;
+  }
+ }
+ if(found){
+  return 1;
+ }
+ #endif
+ arp_send_request(buffer, destIp);
+ dlength = EthWaitPacket(buffer, ETH_TYPE_ARP_V, 100);
  if(dlength != 0){
-  if(arp_packet_is_arp(rxtx_buffer, ARP_OPCODE_REPLY_V )){
+  if(arp_packet_is_arp(buffer, ARP_OPCODE_REPLY_V)){
    // copy destination mac address from arp reply packet to destination mac address
-   memcpy (dest_mac, rxtx_buffer + ETH_SRC_MAC_P, 6);
+   memcpy(destMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
+   #if NET_ARP_CACHE_SIZE > 0
+   // save destination mac into cache
+   memcpy(arpCache[minUseCacheId] + ARP_CACHE_MAC_P, destMac, MAC_ADDRESS_SIZE);
+   memcpy(arpCache[minUseCacheId] + ARP_CACHE_IP_P, destIp, IP_V4_ADDRESS_SIZE);
+   if(!arpCache[minUseCacheId][ARP_CACHE_USE_COUNT_P]){
+    arpCache[minUseCacheId][ARP_CACHE_USE_COUNT_P] = 2;
+   }
+   #endif
    return 1;
   }
-  NetHandleIncomingPacket(rxtx_buffer, dlength);
+  NetHandleIncomingPacket(buffer, dlength);
  }
  return 0;
 }

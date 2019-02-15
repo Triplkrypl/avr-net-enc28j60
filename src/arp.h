@@ -26,7 +26,7 @@
 // http://www.gnu.de/gpl-ger.html
 //
 //********************************************************************************************
-#define ARP_PACKET_LEN			28
+#define ARP_V4_PACKET_LEN			28
 
 #define ARP_OPCODE_REQUEST_V	0x0001
 #define ARP_OPCODE_REQUEST_H_V	0x00
@@ -55,14 +55,21 @@
 #define ARP_DST_MAC_P			0x20
 #define ARP_DST_IP_P			0x26
 
+#ifndef NET_ARP_CACHE_SIZE
+#define NET_ARP_CACHE_SIZE     5
+#endif
+
+#define ARP_CACHE_USE_COUNT_P   (MAC_ADDRESS_SIZE + IP_V4_ADDRESS_SIZE)
+#define ARP_CACHE_MAC_P         0
+#define ARP_CACHE_IP_P          (MAC_ADDRESS_SIZE)
+
 //********************************************************************************************
 //
 // Prototype function
 //
 //********************************************************************************************
-void arp_generate_packet ( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned char *dest_ip );// todo refactor
-void arp_send_request ( BYTE *rxtx_buffer, const unsigned char *dest_ip );// todo refactor
+void ArpInit();
 void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac );// todo refactor
 BYTE arp_packet_is_arp ( BYTE *rxtx_buffer, unsigned short opcode );// todo refactor
-unsigned char ArpWhoIs(unsigned char *rxtx_buffer, const unsigned char *dest_ip, unsigned char *dest_mac);
+unsigned char ArpWhoIs(unsigned char *buffer, const unsigned char destIp[IP_V4_ADDRESS_SIZE], unsigned char destMac[MAC_ADDRESS_SIZE]);
 #endif

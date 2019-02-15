@@ -29,7 +29,9 @@
 #include "enc28j60.h"
 #include "ethernet.h"
 #include "ip.h"
+#include "arp.h"
 #include "udp.h"
+#include "network.h"
 #include "util.c"
 //
 //********************************************************************************************
@@ -56,6 +58,9 @@
 // +                                           Data :::                                            +
 // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 //
+
+extern unsigned short connectPortRotaiting;
+
 //********************************************************************************************
 //
 // Function : udp_generate_header
@@ -86,11 +91,11 @@ static void UdpGenerateHeader(unsigned char *buffer, const unsigned short source
 
 //********************************************************************************************
 //
-// Function : UdpSend
+// Function : UdpSendDataMac
 // Description : send upd data into network
 //
 //********************************************************************************************
-unsigned char UdpSend(unsigned char* buffer, const unsigned char* mac, const unsigned char *ip, const unsigned short port, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength){
+unsigned short UdpSendDataMac(unsigned char* buffer, const unsigned char* mac, const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength){
  if(dataLength + ETH_HEADER_LEN + IP_HEADER_LEN + UDP_HEADER_LEN + dataLength > MAX_TX_BUFFER){
   return 0;
  }
@@ -100,7 +105,72 @@ unsigned char UdpSend(unsigned char* buffer, const unsigned char* mac, const uns
  UdpGenerateHeader(buffer, port, remotePort, UDP_HEADER_LEN + dataLength);
  // send packet to ethernet media
  enc28j60_packet_send(buffer, ETH_HEADER_LEN + IP_HEADER_LEN + UDP_HEADER_LEN + dataLength);
- return 1;
+ return port;
+}
+
+//********************************************************************************************
+//
+// Function : UdpSendData
+// Description : send upd data into network (function lookup mac address for ip)
+//
+//********************************************************************************************
+unsigned short UdpSendData(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength){
+ unsigned char mac[MAC_ADDRESS_SIZE];
+ if(!ArpWhoIs(buffer, ip, mac)){
+  return 0;
+ }
+ return UdpSendDataMac(buffer, mac, ip, remotePort, port, data, dataLength);
+}
+
+//********************************************************************************************
+//
+// Function : UdpSendDataTmpPort
+// Description : send upd data into network, function lookup mac address for ip and use incremental source port
+//               source port is increment by call this function and if new client tcp connection is try open
+//               function return temporary port for synchronous wait for response data
+//
+//********************************************************************************************
+unsigned short UdpSendDataTmpPort(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength){
+ unsigned short port = connectPortRotaiting;
+ connectPortRotaiting = (connectPortRotaiting == NET_MAX_PORT) ? NET_MIN_DINAMIC_PORT : connectPortRotaiting + 1;
+ return UdpSendData(buffer, ip, remotePort, connectPortRotaiting, data, dataLength);
+}
+
+//********************************************************************************************
+//
+// Function : UdpReceiveData
+// Description : synchronous wait for any udp data form given remote source
+//
+//********************************************************************************************
+unsigned char UdpReceiveData(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength){
+ unsigned short length, waiting = 0;
+ for(;;){
+  length = EthWaitPacket(buffer, ETH_TYPE_IP_V, 0);
+  if(length != 0){
+   if(ip_packet_is_ip(buffer) && buffer[IP_PROTO_P] == IP_PROTO_UDP_V){
+    if(
+     (memcmp(ip, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE) == 0) &&
+     (remotePort == CharsToShort(buffer + UDP_SRC_PORT_H_P)) &&
+     (port == CharsToShort(buffer + UDP_DST_PORT_H_P))
+    ){
+     *data = buffer + UDP_DATA_P;
+     *dataLength = length - UDP_DATA_P;
+     return 1;
+    }
+    unsigned char srcMac[MAC_ADDRESS_SIZE], srcIp[IP_V4_ADDRESS_SIZE];
+    memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
+    memcpy(srcIp, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
+    UdpHandleIncomingPacket(buffer, length, srcMac, srcIp);
+   }else{
+    NetHandleIncomingPacket(buffer, length);
+   }
+  }
+  waiting++;
+  if(waiting > timeout){
+   break;
+  }
+ }
+ return 0;
 }
 
 // todo vyhodit testovaci kod
@@ -120,6 +190,6 @@ void UdpHandleIncomingPacket(unsigned char *buffer, unsigned short length, const
  UARTWriteChars("UDP Prichozi data '");
  UARTWriteCharsLength(buffer + UDP_DATA_P, length);
  UARTWriteChars("'\n");
- UdpSend(buffer, srcMac, srcIp, CharsToShort(buffer + UDP_DST_PORT_H_P), CharsToShort(buffer + UDP_SRC_PORT_H_P), buffer + UDP_DATA_P, length);
+ UdpSendDataMac(buffer, srcMac, srcIp, CharsToShort(buffer + UDP_SRC_PORT_H_P), CharsToShort(buffer + UDP_DST_PORT_H_P), buffer + UDP_DATA_P, length);
  //todo pridani callbacku na prichozi packaket
 }

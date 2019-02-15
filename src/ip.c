@@ -92,7 +92,7 @@ void ip_generate_header(BYTE *rxtx_buffer, WORD_BYTES total_length, BYTE protoco
 	for ( i=0; i<4; i++ )
 	{
 		rxtx_buffer[ IP_DST_IP_P + i ] = dest_ip[i];
-		rxtx_buffer[ IP_SRC_IP_P + i ] = avr_ip[i];
+		rxtx_buffer[ IP_SRC_IP_P + i ] = avrIp[i];
 	}
 
 	// clear the 2 byte checksum
@@ -116,7 +116,7 @@ BYTE ip_packet_is_ip(BYTE *rxtx_buffer){
   return 0;
  }
  // if ip packet not send to avr
- if(memcmp(avr_ip, rxtx_buffer + IP_DST_IP_P, IP_V4_ADDRESS_SIZE) != 0){
+ if(memcmp(avrIp, rxtx_buffer + IP_DST_IP_P, IP_V4_ADDRESS_SIZE) != 0){
   return 0;
  }
  return 1;

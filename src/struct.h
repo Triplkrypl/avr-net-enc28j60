@@ -26,7 +26,6 @@
 // http://www.gnu.de/gpl-ger.html
 //
 //********************************************************************************************
-//typedef enum _BOOL { false = 0, true } bool;
 typedef unsigned char	BYTE;				// 8-bit
 typedef unsigned int	WORD;				// 16-bit
 typedef unsigned long	DWORD;				// 32-bit
@@ -154,20 +153,6 @@ typedef struct _IP_HEADER
 	BYTE		dest_ip[4];
 
 }IP_HEADER;
-
-// ARP packet structure
-typedef struct _ARP_PACKET
-{
-	WORD_BYTES	hardware_type;
-	WORD_BYTES	protocol_type;
-	BYTE		hardware_length;
-	BYTE		protocol_length;
-	WORD_BYTES	opcode;
-	BYTE	src_mac[6];
-	BYTE		src_ip[4];
-	BYTE	dest_mac[6];
-	BYTE		dest_ip[4];
-} ARP_PACKET;
 
 // ICMP packet structure
 #define ICMP_MAX_DATA	60

@@ -11,3 +11,4 @@ If someone will recognize code with is not mine and will know repository i will 
 * Improvements:
     * tcp can handle multiple established connections
     * synchronous wait for packet if receive different packet than expected will send received packed in to main loop function for handle except drop
+    * arp broadcast responses are cached

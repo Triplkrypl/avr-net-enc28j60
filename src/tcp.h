@@ -37,8 +37,6 @@
 #define TCP_STATE_ESTABLISHED 3
 #define TCP_STATE_DYEING 4
 
-#define TCP_MIN_DINAMIC_PORT 49152
-#define TCP_MAX_PORT 65535
 #define TCP_MAX_SEGMENT_SIZE (MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN - TCP_HEADER_LEN)
 
 #define TCP_FLAG_FIN_V		0x01
@@ -92,7 +90,7 @@ typedef struct{
 void TcpInit();
 unsigned char TcpIsTcp(const unsigned char *rxtx_buffer);
 const TcpConnection *TcpGetConnection(const unsigned char connectionId);
-unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short timeout);
+unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short remotePort, const unsigned short timeout);
 unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
 unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout);

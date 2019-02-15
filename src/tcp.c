@@ -60,7 +60,7 @@
 //
 //********************************************************************************************
 
-static unsigned long connectPortRotaiting = TCP_MIN_DINAMIC_PORT;
+extern unsigned short connectPortRotaiting;
 static TcpConnection connections[TCP_MAX_CONNECTIONS];
 
 //*****************************************************************************************
@@ -352,12 +352,11 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
      TcpHandleIncomingPacket(buffer, length, connection->mac, connection->ip);
     }
     return 1;
-   }else{
-    unsigned char srcMac[MAC_ADDRESS_SIZE], srcIp[IP_V4_ADDRESS_SIZE];
-    memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
-    memcpy(srcIp, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
-    TcpHandleIncomingPacket(buffer, length, srcMac, srcIp);
    }
+   unsigned char srcMac[MAC_ADDRESS_SIZE], srcIp[IP_V4_ADDRESS_SIZE];
+   memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
+   memcpy(srcIp, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
+   TcpHandleIncomingPacket(buffer, length, srcMac, srcIp);
   }else{
    NetHandleIncomingPacket(buffer, length);
   }
@@ -371,7 +370,7 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
 // Description : active creation connection to server
 //
 //********************************************************************************************
-unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short timeout){
+unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short remotePort, const unsigned short timeout){
  unsigned char connectionId = TcpGetEmptyConenctionId();
  if(connectionId == TCP_INVALID_CONNECTION_ID){
   return TCP_INVALID_CONNECTION_ID;
@@ -379,11 +378,11 @@ unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADD
  TcpConnection *connection = connections + connectionId;
  memcpy(connection->ip, ip, IP_V4_ADDRESS_SIZE);
  connection->port = connectPortRotaiting;
- connection->remotePort = port;
+ connection->remotePort = remotePort;
  connection->sendSequence = 2;
  connection->expectedSequence = 0;
  connection->state = TCP_STATE_NEW;
- connectPortRotaiting = (connectPortRotaiting == TCP_MAX_PORT) ? TCP_MIN_DINAMIC_PORT : connectPortRotaiting + 1;
+ connectPortRotaiting = (connectPortRotaiting == NET_MAX_PORT) ? NET_MIN_DINAMIC_PORT : connectPortRotaiting + 1;
  if(!ArpWhoIs(buffer, ip, connection->mac)){
   connection->state = TCP_STATE_NO_CONNECTION;
   return TCP_INVALID_CONNECTION_ID;
@@ -613,7 +612,16 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length, const
  UARTWriteChars("Prichozi data '");
  UARTWriteCharsLength(buffer + TcpGetDataPosition(buffer), length);
  UARTWriteChars("'\n");
-
- TcpSendData(buffer, conId, 5000, buffer + TcpGetDataPosition(buffer), length);
+ unsigned char data[100];
+ unsigned char *data1;
+ memcpy(data, buffer + TcpGetDataPosition(buffer), length);
+ TcpSendData(buffer, conId, 5000, data, length);
+ UdpSendData(buffer, connections[conId].ip, 5000, 6000, data, length);
+ unsigned char result = UdpReceiveData(buffer, connections[conId].ip, 5000, 6000, 30000, &data1, &length);
+ if(result){
+  UARTWriteChars("UDP client Prichozi data '");
+  UARTWriteCharsLength(data1, length);
+  UARTWriteChars("'\n");
+ }
  return;
 }

@@ -41,6 +41,9 @@
 #define UDP_CHECKSUM_L_P	0x29
 #define UDP_DATA_P			0x2A
 
-unsigned char UdpSend(unsigned char* buffer, const unsigned char* mac, const unsigned char *ip, const unsigned short port, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength);
+unsigned short UdpSendDataMac(unsigned char *buffer, const unsigned char *mac, const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength);
+unsigned short UdpSendData(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength);
+unsigned short UdpSendDataTmpPort(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength);
+unsigned char UdpReceiveData(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 void UdpHandleIncomingPacket(unsigned char *buffer, const unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]);
 #endif
