@@ -153,16 +153,4 @@ typedef struct _IP_HEADER
 	BYTE		dest_ip[4];
 
 }IP_HEADER;
-
-// ICMP packet structure
-#define ICMP_MAX_DATA	60
-typedef struct _ICMP_HEADER
-{
-	BYTE		type;
-	BYTE		code;
-	WORD_BYTES	checksum;
-	WORD_BYTES	identifier;
-	WORD_BYTES	sequence_number;
-} ICMP_HEADER;
-
 #endif

@@ -55,13 +55,11 @@
 // ethernet type.
 //
 //********************************************************************************************
-void eth_generate_header(BYTE *rxtx_buffer, const WORD_BYTES type, const unsigned char destMac[MAC_ADDRESS_SIZE]){
+void eth_generate_header(unsigned char *buffer, const unsigned short type, const unsigned char destMac[MAC_ADDRESS_SIZE]){
  //copy the destination mac from the source and fill my mac into src
- memcpy(rxtx_buffer + ETH_DST_MAC_P, destMac, MAC_ADDRESS_SIZE);
- memcpy(rxtx_buffer + ETH_SRC_MAC_P, avr_mac, MAC_ADDRESS_SIZE);
-
- rxtx_buffer[ ETH_TYPE_H_P ] = type.byte.high;//HIGH(type);
- rxtx_buffer[ ETH_TYPE_L_P ] = type.byte.low;//LOW(type);
+ memcpy(buffer + ETH_DST_MAC_P, destMac, MAC_ADDRESS_SIZE);
+ memcpy(buffer + ETH_SRC_MAC_P, avr_mac, MAC_ADDRESS_SIZE);
+ CharsPutShort(buffer + ETH_TYPE_H_P, type);
 }
 //********************************************************************************************
 //

@@ -58,52 +58,42 @@ static WORD_BYTES ip_identfier=(WORD_BYTES){1};
 // Description : generate all ip header
 //
 //********************************************************************************************
-void ip_generate_header(BYTE *rxtx_buffer, WORD_BYTES total_length, BYTE protocol, const unsigned char dest_ip[IP_V4_ADDRESS_SIZE])
-{
-	BYTE i;
-	WORD_BYTES ck;
-
+void ip_generate_header(unsigned char *buffer, unsigned short totalLength, unsigned char protocol, const unsigned char destIp[IP_V4_ADDRESS_SIZE]){
 	// set ipv4 and header length
-	rxtx_buffer[ IP_P ] = IP_V4_V | IP_HEADER_LENGTH_V;
+	buffer[ IP_P ] = IP_V4_V | IP_HEADER_LENGTH_V;
 
 	// set TOS to default 0x00
-	rxtx_buffer[ IP_TOS_P ] = 0x00;
+	buffer[ IP_TOS_P ] = 0x00;
 
 	// set total length
-	rxtx_buffer [ IP_TOTLEN_H_P ] = total_length.byte.high;
-	rxtx_buffer [ IP_TOTLEN_L_P ] = total_length.byte.low;
+    CharsPutShort(buffer + IP_TOTLEN_H_P, totalLength);
 
 	// set packet identification
-	rxtx_buffer [ IP_ID_H_P ] = ip_identfier.byte.high;
-	rxtx_buffer [ IP_ID_L_P ] = ip_identfier.byte.low;
+	buffer [ IP_ID_H_P ] = ip_identfier.byte.high;
+	buffer [ IP_ID_L_P ] = ip_identfier.byte.low;
 	ip_identfier.word++;
 
 	// set fragment flags
-	rxtx_buffer [ IP_FLAGS_H_P ] = 0x00;
-	rxtx_buffer [ IP_FLAGS_L_P ] = 0x00;
+	buffer [ IP_FLAGS_H_P ] = 0x00;
+	buffer [ IP_FLAGS_L_P ] = 0x00;
 
 	// set Time To Live
-	rxtx_buffer [ IP_TTL_P ] = 128;
+	buffer [ IP_TTL_P ] = 128;
 
 	// set ip packettype to tcp/udp/icmp...
-	rxtx_buffer [ IP_PROTO_P ] = protocol;
+	buffer [ IP_PROTO_P ] = protocol;
 
 	// set source and destination ip address
-	for ( i=0; i<4; i++ )
-	{
-		rxtx_buffer[ IP_DST_IP_P + i ] = dest_ip[i];
-		rxtx_buffer[ IP_SRC_IP_P + i ] = avrIp[i];
-	}
+    memcpy(buffer + IP_DST_IP_P, destIp, IP_V4_ADDRESS_SIZE);
+    memcpy(buffer + IP_SRC_IP_P, avrIp, IP_V4_ADDRESS_SIZE);
 
 	// clear the 2 byte checksum
-	rxtx_buffer[ IP_CHECKSUM_H_P ] = 0;
-	rxtx_buffer[ IP_CHECKSUM_L_P ] = 0;
+	buffer[ IP_CHECKSUM_H_P ] = 0;
+	buffer[ IP_CHECKSUM_L_P ] = 0;
 
 	// fill checksum value
 	// calculate the checksum:
-	ck.word = software_checksum ( &rxtx_buffer[ IP_P ], sizeof(IP_HEADER), 0 );
-	rxtx_buffer[ IP_CHECKSUM_H_P ] = ck.byte.high;
-	rxtx_buffer[ IP_CHECKSUM_L_P ] = ck.byte.low;
+	CharsPutShort(buffer + IP_CHECKSUM_H_P, software_checksum (buffer + IP_P, IP_HEADER_LEN, 0));
 }
 //********************************************************************************************
 //

@@ -41,9 +41,21 @@
 #define UDP_CHECKSUM_L_P	0x29
 #define UDP_DATA_P			0x2A
 
+#define UDP_HANDLE_RESULT_OK       0
+#define UDP_HANDLE_RESULT_DROP     0
+#define UDP_HANDLE_RESULT_REJECT   0
+
+typedef struct{
+ unsigned short port;
+ unsigned short remotePort;
+ unsigned char ip[IP_V4_ADDRESS_SIZE];
+ unsigned char mac[MAC_ADDRESS_SIZE];
+} UdpDatagram;
+
 unsigned short UdpSendDataMac(unsigned char *buffer, const unsigned char *mac, const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength);
 unsigned short UdpSendData(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength);
 unsigned short UdpSendDataTmpPort(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength);
 unsigned char UdpReceiveData(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength);
-void UdpHandleIncomingPacket(unsigned char *buffer, const unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]);
+void UdpHandleIncomingPacket(unsigned char *buffer, const unsigned short length);
+unsigned char UdpIncomingDatagram(const UdpDatagram datagram, const unsigned char *data, unsigned short dataLength);
 #endif

@@ -35,7 +35,7 @@
 //}enc28j60_flag;
 static BYTE Enc28j60Bank;
 static WORD_BYTES next_packet_ptr;
-unsigned char avr_mac[MAC_ADDRESS_SIZE] = {NET_MAC};
+const unsigned char avr_mac[MAC_ADDRESS_SIZE] = {NET_MAC};
 //*******************************************************************************************
 //
 // Function : icmp_send_request

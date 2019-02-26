@@ -25,7 +25,6 @@
 //
 //********************************************************************************************
 #include <string.h>
-#include <stdio.h> //todo vyhodit testovaci kod
 #include "enc28j60.h"
 #include "ethernet.h"
 #include "ip.h"
@@ -99,8 +98,8 @@ unsigned short UdpSendDataMac(unsigned char* buffer, const unsigned char* mac, c
  if(dataLength + ETH_HEADER_LEN + IP_HEADER_LEN + UDP_HEADER_LEN + dataLength > MAX_TX_BUFFER){
   return 0;
  }
- eth_generate_header(buffer, (WORD_BYTES){ETH_TYPE_IP_V}, mac);
- ip_generate_header(buffer, (WORD_BYTES){IP_HEADER_LEN + UDP_HEADER_LEN+dataLength}, IP_PROTO_UDP_V, ip);
+ eth_generate_header(buffer, ETH_TYPE_IP_V, mac);
+ ip_generate_header(buffer, IP_HEADER_LEN + UDP_HEADER_LEN + dataLength, IP_PROTO_UDP_V, ip);
  memcpy(buffer + UDP_DATA_P, data, dataLength);
  UdpGenerateHeader(buffer, port, remotePort, UDP_HEADER_LEN + dataLength);
  // send packet to ethernet media
@@ -157,10 +156,7 @@ unsigned char UdpReceiveData(unsigned char *buffer, const unsigned char *ip, con
      *dataLength = length - UDP_DATA_P;
      return 1;
     }
-    unsigned char srcMac[MAC_ADDRESS_SIZE], srcIp[IP_V4_ADDRESS_SIZE];
-    memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
-    memcpy(srcIp, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
-    UdpHandleIncomingPacket(buffer, length, srcMac, srcIp);
+    UdpHandleIncomingPacket(buffer, length);
    }else{
     NetHandleIncomingPacket(buffer, length);
    }
@@ -173,23 +169,20 @@ unsigned char UdpReceiveData(unsigned char *buffer, const unsigned char *ip, con
  return 0;
 }
 
-// todo vyhodit testovaci kod
 //********************************************************************************************
 //
 // Function : UdpHandleIncomingPacket
 // Description : hand incoming udp packet form network
 //
 //********************************************************************************************
-void UdpHandleIncomingPacket(unsigned char *buffer, unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]){
- length = CharsToShort(buffer + UDP_LENGTH_P) - UDP_HEADER_LEN;
- char out[100];
- sprintf(out, "UDP Delka dat %u\n", length);
- UARTWriteChars(out);
- sprintf(out, "UDP Port %u remote port %u\n", CharsToShort(buffer + UDP_DST_PORT_H_P), CharsToShort(buffer + UDP_SRC_PORT_H_P));
- UARTWriteChars(out);
- UARTWriteChars("UDP Prichozi data '");
- UARTWriteCharsLength(buffer + UDP_DATA_P, length);
- UARTWriteChars("'\n");
- UdpSendDataMac(buffer, srcMac, srcIp, CharsToShort(buffer + UDP_SRC_PORT_H_P), CharsToShort(buffer + UDP_DST_PORT_H_P), buffer + UDP_DATA_P, length);
- //todo pridani callbacku na prichozi packaket
+void UdpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
+ UdpDatagram datagram;
+ memcpy(datagram.mac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
+ memcpy(datagram.ip, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
+ datagram.port = CharsToShort(buffer + UDP_DST_PORT_H_P);
+ datagram.remotePort = CharsToShort(buffer + UDP_SRC_PORT_H_P);
+ unsigned char result = UdpIncomingDatagram(datagram, buffer + UDP_DATA_P, CharsToShort(buffer + UDP_LENGTH_P) - UDP_HEADER_LEN);
+ if(result == UDP_HANDLE_RESULT_REJECT){
+  IcmpSendUnreachable(buffer, datagram.mac, datagram.ip, CharsToShort(buffer + IP_TOTLEN_H_P));
+ }
 }

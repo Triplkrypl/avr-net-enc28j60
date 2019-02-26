@@ -94,5 +94,5 @@ unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADD
 unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
 unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout);
-void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length, const unsigned char srcMac[], const unsigned char srcIp[]);
+void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length);
 #endif

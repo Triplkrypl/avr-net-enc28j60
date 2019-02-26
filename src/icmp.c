@@ -24,10 +24,12 @@
 // http://www.gnu.de/gpl-ger.html
 //
 //********************************************************************************************
+#include <string.h>
 #include "enc28j60.h"
 #include "ethernet.h"
 #include "ip.h"
 #include "icmp.h"
+#include "util.c"
 //********************************************************************************************
 //
 // The Internet Control Message Protocol (ICMP) is one of the core protocols of the
@@ -55,38 +57,27 @@
 // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 //
 //********************************************************************************************
-unsigned char icmp_id=1;
-unsigned char icmp_seq=1;
+
 //*******************************************************************************************
 //
 // Function : icmp_send_reply
 // Description : Send ARP reply packet from ARP request packet
 //
 //*******************************************************************************************
-void icmp_generate_packet ( BYTE *rxtx_buffer, unsigned char length )
-{
-	BYTE i;
-	WORD_BYTES ck;
-
-	// In send ICMP request case, generate new ICMP data.
-	if ( rxtx_buffer[ ICMP_TYPE_P ] == ICMP_TYPE_ECHOREQUEST_V )
-	{
-		for ( i=0; i<ICMP_MAX_DATA || i<length; i++ )
-		{
-			rxtx_buffer[ ICMP_DATA_P + i ] = 'A' + i;
-		}
-	}
-	// clear icmp checksum
-	rxtx_buffer[ ICMP_CHECKSUM_H_P ] = 0;
-	rxtx_buffer[ ICMP_CHECKSUM_L_P ] = 0;
-
-	// calculate new checksum.
-	// ICMP checksum calculation begin at ICMP type to ICMP data.
-	// Before calculate new checksum the checksum field must be zero.
-	ck.word = software_checksum ( &rxtx_buffer[ ICMP_TYPE_P ], sizeof(ICMP_HEADER) + length, 0 );
-	rxtx_buffer[ ICMP_CHECKSUM_H_P ] = ck.byte.high;
-	rxtx_buffer[ ICMP_CHECKSUM_L_P ] = ck.byte.low;
+static void IcmpGeneratePacket(unsigned char *buffer, unsigned char icmpType, unsigned char icmpCode, unsigned char dataLength){
+ buffer[ICMP_TYPE_P] = icmpType;
+ buffer[ICMP_CODE_P] = icmpCode;
+ // clear icmp checksum
+ buffer[ICMP_CHECKSUM_H_P] = 0;
+ buffer[ICMP_CHECKSUM_L_P] = 0;
+ // calculate new checksum.
+ // ICMP checksum calculation begin at ICMP type to ICMP data.
+ // Before calculate new checksum the checksum field must be zero.
+ unsigned short test = software_checksum(buffer + ICMP_TYPE_P, ICMP_HEADER_LEN + dataLength, 0);
+ CharsPutShort(buffer + ICMP_CHECKSUM_H_P, test);
 }
+
+/*
 //*******************************************************************************************
 //
 // Function : icmp_send_request
@@ -115,39 +106,48 @@ void icmp_send_request ( BYTE *rxtx_buffer, unsigned char length, BYTE *dest_mac
 	// send packet to ethernet media
 	enc28j60_packet_send ( rxtx_buffer, sizeof(ETH_HEADER) + sizeof(IP_HEADER) + sizeof(ICMP_HEADER) + length );
 }
+*/
+
 //*******************************************************************************************
 //
 // Function : icmp_send_reply
-// Description : Send ARP reply packet to destination.
+// Description : Send PING reply packet to destination.
 //
 //*******************************************************************************************
-BYTE icmp_send_reply ( BYTE *rxtx_buffer, unsigned short length, BYTE *dest_mac, BYTE *dest_ip )
-{
-
-	// check protocol is icmp or not?
-	if ( rxtx_buffer [ IP_PROTO_P ] != IP_PROTO_ICMP_V ){
-		return 0;
-	}
-
-	// check icmp packet type is echo request or not?
-	if ( rxtx_buffer [ ICMP_TYPE_P ] != ICMP_TYPE_ECHOREQUEST_V ){
-		return 0;
-  }
-
-	// set ethernet header
-	eth_generate_header ( rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, dest_mac );
-
-  // generate ip header and checksum
-	ip_generate_header ( rxtx_buffer, (WORD_BYTES){(rxtx_buffer[IP_TOTLEN_H_P]<<8)|rxtx_buffer[IP_TOTLEN_L_P]}, IP_PROTO_ICMP_V, dest_ip );
-
-	// generate icmp packet
-	rxtx_buffer[ ICMP_TYPE_P ] = ICMP_TYPE_ECHOREPLY_V;
-	icmp_generate_packet ( rxtx_buffer, length - ICMP_DATA_P );
-
-	// send packet to ethernet media
-	enc28j60_packet_send ( rxtx_buffer, length );
-	return 1;
+unsigned char icmp_send_reply ( unsigned char *rxtx_buffer, unsigned short length, unsigned char *dest_mac, unsigned char *destIp){
+ // check protocol is icmp or not?
+ if ( rxtx_buffer [ IP_PROTO_P ] != IP_PROTO_ICMP_V ){
+  return 0;
+ }
+ // check icmp packet type is echo request or not?
+ if ( rxtx_buffer [ ICMP_TYPE_P ] != ICMP_TYPE_ECHOREQUEST_V ){
+  return 0;
+ }
+ eth_generate_header(rxtx_buffer, ETH_TYPE_IP_V, dest_mac);
+ ip_generate_header(rxtx_buffer, length - ETH_HEADER_LEN, IP_PROTO_ICMP_V, destIp);
+ IcmpGeneratePacket(rxtx_buffer, ICMP_TYPE_ECHOREPLY_V, 0, length - ICMP_DATA_P);
+ // send packet to ethernet media
+ enc28j60_packet_send(rxtx_buffer, length);
+ return 1;
 }
+
+//*******************************************************************************************
+//
+// Function : IcmpSendUnreachable
+// Description : Send icmp response for any unreachable service on ip protocol
+//
+//*******************************************************************************************
+void IcmpSendUnreachable(unsigned char *buffer, const unsigned char remoteMac[MAC_ADDRESS_SIZE], const unsigned char remoteIp[IP_V4_ADDRESS_SIZE], unsigned short ipTotalLength){
+ if(ipTotalLength > 8 + IP_HEADER_LEN){
+  ipTotalLength = 8 + IP_HEADER_LEN;
+ }
+ memcpy(buffer + ICMP_DATA_P, buffer + IP_P, ipTotalLength);
+ IcmpGeneratePacket(buffer, ICMP_TYPE_UNREACHABLE_V, ICMP_CODE_UNREACHABLE_HOST_SERVICE_V, ipTotalLength);
+ eth_generate_header(buffer, ETH_TYPE_IP_V, remoteMac);
+ ip_generate_header(buffer, IP_HEADER_LEN + ICMP_HEADER_LEN + ipTotalLength, IP_PROTO_ICMP_V, remoteIp);
+ enc28j60_packet_send(buffer, ETH_HEADER_LEN + IP_HEADER_LEN + ICMP_HEADER_LEN + ipTotalLength);
+}
+
 //*******************************************************************************************
 //
 // Function : icmp_ping_server

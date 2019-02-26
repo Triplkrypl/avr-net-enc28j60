@@ -154,7 +154,7 @@ static inline void TcpSetPort(unsigned char *buffer, const unsigned short destin
 //
 //********************************************************************************************
 static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connection, const unsigned char flags, unsigned short dlength){
- eth_generate_header(rxtx_buffer, (WORD_BYTES){ETH_TYPE_IP_V}, connection.mac);
+ eth_generate_header(rxtx_buffer, ETH_TYPE_IP_V, connection.mac);
  if(flags & TCP_FLAG_SYN_V){
   // setup maximum segment size
   rxtx_buffer[ TCP_OPTIONS_P + 0 ] = 2;
@@ -169,7 +169,7 @@ static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connec
   // no options: 20 bytes: 5*32/8 = 20
   rxtx_buffer[TCP_HEADER_LEN_P] = 0x50;
  }
- ip_generate_header(rxtx_buffer, (WORD_BYTES){IP_HEADER_LEN + TCP_HEADER_LEN + dlength}, IP_PROTO_TCP_V, connection.ip);
+ ip_generate_header(rxtx_buffer, IP_HEADER_LEN + TCP_HEADER_LEN + dlength, IP_PROTO_TCP_V, connection.ip);
  TcpSetSequence(rxtx_buffer, connection.sendSequence, connection.expectedSequence);
  TcpSetPort(rxtx_buffer, connection.remotePort, connection.port);
  // setup tcp flags
@@ -349,14 +349,11 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
     }
     connection->sendSequence = ack;
     if(TcpGetDataLength(buffer) != 0 && sendedDataLength != 0) {
-     TcpHandleIncomingPacket(buffer, length, connection->mac, connection->ip);
+     TcpHandleIncomingPacket(buffer, length);
     }
     return 1;
    }
-   unsigned char srcMac[MAC_ADDRESS_SIZE], srcIp[IP_V4_ADDRESS_SIZE];
-   memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
-   memcpy(srcIp, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
-   TcpHandleIncomingPacket(buffer, length, srcMac, srcIp);
+   TcpHandleIncomingPacket(buffer, length);
   }else{
    NetHandleIncomingPacket(buffer, length);
   }
@@ -543,9 +540,9 @@ unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connection
 // Description : function will passive processed any incoming tcp packet
 //
 //********************************************************************************************
-void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length, const unsigned char srcMac[MAC_ADDRESS_SIZE], const unsigned char srcIp[IP_V4_ADDRESS_SIZE]){
+void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
  char out[100];
- unsigned char conId = TcpGetConnectionId(srcMac, srcIp, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P), buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V);
+ unsigned char conId = TcpGetConnectionId(buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P), buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V);
  if(conId == TCP_INVALID_CONNECTION_ID){
   return;
  }
@@ -560,6 +557,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length, const
  if((buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V) && (connections[conId].state == TCP_STATE_NEW || connections[conId].state == TCP_STATE_SYN_RECEIVED)){
   if(connections[conId].state == TCP_STATE_NEW){
    if(connections[conId].port != 80){
+    IcmpSendUnreachable(buffer, connections[conId].mac, connections[conId].ip, CharsToShort(buffer + IP_TOTLEN_H_P));
     connections[conId].state = TCP_STATE_NO_CONNECTION;
     return;// todo neocekavany prichozi port zatim dropujem, vyresit icmp s odmitnutim
    }

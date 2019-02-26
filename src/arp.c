@@ -70,7 +70,7 @@
 //
 //********************************************************************************************
 
-unsigned char avrIp[IP_V4_ADDRESS_SIZE] = {NET_IP};
+const unsigned char avrIp[IP_V4_ADDRESS_SIZE] = {NET_IP};
 #if NET_ARP_CACHE_SIZE > 0
 static unsigned char arpCache[NET_ARP_CACHE_SIZE][MAC_ADDRESS_SIZE + IP_V4_ADDRESS_SIZE + 1];
 #endif
@@ -122,28 +122,23 @@ static void arp_generate_packet( BYTE *rxtx_buffer, BYTE *dest_mac, const unsign
 // Description : send arp request packet (who is?) to network.
 //
 //********************************************************************************************
-static void arp_send_request ( BYTE *rxtx_buffer, const unsigned char *dest_ip ){
-	unsigned char i;
-	unsigned char destMac[MAC_ADDRESS_SIZE];
-
-	// generate ethernet header
-	for ( i=0; i<MAC_ADDRESS_SIZE; i++){
-		destMac[i] = 0xff;
-    }
-	eth_generate_header ( rxtx_buffer, (WORD_BYTES){ETH_TYPE_ARP_V}, destMac);
-
-	// generate arp packet
-	for ( i=0; i<MAC_ADDRESS_SIZE; i++){
-		destMac[i] = 0x00;
-    }
-
-	// set arp opcode is request
-	rxtx_buffer[ ARP_OPCODE_H_P ] = ARP_OPCODE_REQUEST_H_V;
-	rxtx_buffer[ ARP_OPCODE_L_P ] = ARP_OPCODE_REQUEST_L_V;
-	arp_generate_packet(rxtx_buffer, destMac, dest_ip);
-
-	// send arp packet to network
-	enc28j60_packet_send(rxtx_buffer, ETH_HEADER_LEN + ARP_V4_PACKET_LEN);
+static void arp_send_request(unsigned char *rxtx_buffer, const unsigned char *destIp){
+ unsigned char i, destMac[MAC_ADDRESS_SIZE];
+ // generate ethernet header
+ for ( i=0; i<MAC_ADDRESS_SIZE; i++){
+  destMac[i] = 0xff;
+ }
+ eth_generate_header(rxtx_buffer, ETH_TYPE_ARP_V, destMac);
+ // generate arp packet
+ for ( i=0; i<MAC_ADDRESS_SIZE; i++){
+  destMac[i] = 0x00;
+ }
+ // set arp opcode is request
+ rxtx_buffer[ ARP_OPCODE_H_P ] = ARP_OPCODE_REQUEST_H_V;
+ rxtx_buffer[ ARP_OPCODE_L_P ] = ARP_OPCODE_REQUEST_L_V;
+ arp_generate_packet(rxtx_buffer, destMac, destIp);
+ // send arp packet to network
+ enc28j60_packet_send(rxtx_buffer, ETH_HEADER_LEN + ARP_V4_PACKET_LEN);
 }
 
 //*******************************************************************************************
@@ -171,10 +166,9 @@ unsigned char arp_packet_is_arp(unsigned char *rxtx_buffer, unsigned short opcod
 // Description : Send reply if recieved packet is ARP and IP address is match with avr_ip
 //
 //*******************************************************************************************
-void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac )
-{
+void arp_send_reply(unsigned char *rxtx_buffer, unsigned char *dest_mac){
 	// generate ethernet header
-	eth_generate_header ( rxtx_buffer, (WORD_BYTES){ETH_TYPE_ARP_V}, dest_mac );
+	eth_generate_header(rxtx_buffer, ETH_TYPE_ARP_V, dest_mac);
 
 	// change packet type to echo reply
 	rxtx_buffer[ ARP_OPCODE_H_P ] = ARP_OPCODE_REPLY_H_V;

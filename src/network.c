@@ -29,31 +29,33 @@ void NetHandleNetwork(){
 }
 
 void NetHandleIncomingPacket(unsigned char *buffer, unsigned short length){
- unsigned char srcMac[MAC_ADDRESS_SIZE];
- memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
- if(arp_packet_is_arp(buffer, ARP_OPCODE_REQUEST_V)){
-  arp_send_reply(buffer, srcMac);
-  return;
+ {
+  unsigned char srcMac[MAC_ADDRESS_SIZE];
+  memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
+  if(arp_packet_is_arp(buffer, ARP_OPCODE_REQUEST_V)){
+   arp_send_reply(buffer, srcMac);
+   return;
+  }
+  if(!ip_packet_is_ip(buffer)){
+   return;
+  }
+  unsigned char srcIp[IP_V4_ADDRESS_SIZE];
+  memcpy(srcIp, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
+  #ifdef ICMP
+  if(icmp_send_reply(buffer, length, srcMac, srcIp)){
+   return;
+  }
+  #endif
  }
- if(!ip_packet_is_ip(buffer)){
-  return;
- }
- unsigned char srcIp[IP_V4_ADDRESS_SIZE];
- memcpy(srcIp, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
- #ifdef ICMP
- if(icmp_send_reply(buffer, length, srcMac, srcIp)){
-  return;
- }
- #endif
  #ifdef UDP
  if(buffer[IP_PROTO_P] == IP_PROTO_UDP_V){
-  UdpHandleIncomingPacket(buffer, length, srcMac, srcIp);
+  UdpHandleIncomingPacket(buffer, length);
   return;
  }
  #endif
  #ifdef TCP
  if(TcpIsTcp(buffer)){
-  TcpHandleIncomingPacket(buffer, length, srcMac, srcIp);
+  TcpHandleIncomingPacket(buffer, length);
   return;
  }
  #endif
