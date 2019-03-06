@@ -128,7 +128,7 @@ unsigned short EthWaitPacket(unsigned char *rxtx_buffer, unsigned short type, un
    if(EthCheckType(rxtx_buffer, type) && memcmp(rxtx_buffer + ETH_DST_MAC_P, avr_mac, MAC_ADDRESS_SIZE) == 0){
     return length;
    }
-   NetHandleIncomingPacket(rxtx_buffer, length);
+   NetHandleIncomingPacket(length);
   }
   microWaiting += 1;
   if(microWaiting == 10){

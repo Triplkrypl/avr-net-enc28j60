@@ -52,10 +52,10 @@ typedef struct{
  unsigned char mac[MAC_ADDRESS_SIZE];
 } UdpDatagram;
 
-unsigned short UdpSendDataMac(unsigned char *buffer, const unsigned char *mac, const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength);
-unsigned short UdpSendData(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength);
-unsigned short UdpSendDataTmpPort(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength);
-unsigned char UdpReceiveData(unsigned char *buffer, const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength);
+unsigned short UdpSendDataMac(const unsigned char *mac, const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength);
+unsigned short UdpSendData(const unsigned char *ip, const unsigned short remotePort, const unsigned short port, const unsigned char *data, const unsigned short dataLength);
+unsigned short UdpSendDataTmpPort(const unsigned char *ip, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength);
+unsigned char UdpReceiveData(const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 void UdpHandleIncomingPacket(unsigned char *buffer, const unsigned short length);
-unsigned char UdpIncomingDatagram(const UdpDatagram datagram, const unsigned char *data, unsigned short dataLength);
+unsigned char UdpOnIncomingDatagram(const UdpDatagram datagram, const unsigned char *data, unsigned short dataLength);
 #endif

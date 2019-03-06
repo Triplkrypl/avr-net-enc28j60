@@ -88,11 +88,10 @@ typedef struct{
 //
 //********************************************************************************************
 void TcpInit();
-unsigned char TcpIsTcp(const unsigned char *rxtx_buffer);
 const TcpConnection *TcpGetConnection(const unsigned char connectionId);
-unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short remotePort, const unsigned short timeout);
-unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
-unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
-unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout);
+unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short remotePort, const unsigned short timeout);
+unsigned char TcpSendData(const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
+unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
+unsigned char TcpDiconnect(const unsigned char connectionId, const unsigned short timeout);
 void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length);
 #endif

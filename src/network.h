@@ -6,5 +6,6 @@
 #define NETWORK
 void NetInit();
 void NetHandleNetwork();
-void NetHandleIncomingPacket(unsigned char *buffer, unsigned short length);
+void NetHandleIncomingPacket(unsigned short length);
+unsigned char *NetGetBuffer();
 #endif

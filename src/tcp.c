@@ -220,19 +220,6 @@ static unsigned char TcpSendAck(unsigned char *buffer, TcpConnection *connection
 
 //********************************************************************************************
 //
-// Function : TcpIsTcp
-// Description : check if packet in buffer is tcp packet
-//
-//********************************************************************************************
-unsigned char TcpIsTcp(const unsigned char *rxtx_buffer){
- if(rxtx_buffer[IP_PROTO_P] == IP_PROTO_TCP_V){
-  return 1;
- }
- return 0;
-}
-
-//********************************************************************************************
-//
 // Function : TcpGetOptionPosition
 // Description : get tcp option position in options list return 0 if option is not set
 //
@@ -335,7 +322,7 @@ static unsigned char TcpGetConnectionId(const unsigned char mac[MAC_ADDRESS_SIZE
 static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connection, unsigned short sendedDataLength, unsigned char expectedFlag){
  unsigned short length = EthWaitPacket(buffer, ETH_TYPE_IP_V, 0);
  if(length != 0){
-  if(ip_packet_is_ip(buffer) && TcpIsTcp(buffer)){
+  if(ip_packet_is_ip(buffer) && buffer[IP_PROTO_P] == IP_PROTO_TCP_V){
    unsigned long seq = CharsToLong(buffer + TCP_SEQ_P);
    unsigned long ack = CharsToLong(buffer + TCP_SEQACK_P);
    if(
@@ -355,7 +342,7 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
    }
    TcpHandleIncomingPacket(buffer, length);
   }else{
-   NetHandleIncomingPacket(buffer, length);
+   NetHandleIncomingPacket(length);
   }
  }
  return 0;
@@ -367,7 +354,7 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
 // Description : active creation connection to server
 //
 //********************************************************************************************
-unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short remotePort, const unsigned short timeout){
+unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short remotePort, const unsigned short timeout){
  unsigned char connectionId = TcpGetEmptyConenctionId();
  if(connectionId == TCP_INVALID_CONNECTION_ID){
   return TCP_INVALID_CONNECTION_ID;
@@ -380,6 +367,7 @@ unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADD
  connection->expectedSequence = 0;
  connection->state = TCP_STATE_NEW;
  connectPortRotaiting = (connectPortRotaiting == NET_MAX_PORT) ? NET_MIN_DINAMIC_PORT : connectPortRotaiting + 1;
+ unsigned char *buffer = NetGetBuffer();
  if(!ArpWhoIs(buffer, ip, connection->mac)){
   connection->state = TCP_STATE_NO_CONNECTION;
   return TCP_INVALID_CONNECTION_ID;
@@ -411,7 +399,7 @@ unsigned char TcpConnect(unsigned char *buffer, const unsigned char ip[IP_V4_ADD
 // Description : send data into tcp connection and synchronous wait for ACK with timeout
 //
 //********************************************************************************************
-unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength){
+unsigned char TcpSendData(const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength){
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }
@@ -420,7 +408,7 @@ unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionI
   return 0;
  }
  unsigned short waiting = 0, offset = 0, partLength;
- unsigned char firstTry;
+ unsigned char firstTry, *buffer = NetGetBuffer();
  do{
   firstTry = 1;
   partLength = connection->maxSegmetSize ? (connection->maxSegmetSize < TCP_MAX_SEGMENT_SIZE ? connection->maxSegmetSize : TCP_MAX_SEGMENT_SIZE) : TCP_MAX_SEGMENT_SIZE;
@@ -453,7 +441,7 @@ unsigned char TcpSendData(unsigned char *buffer, const unsigned char connectionI
 // Description : synchronous wait for tcp data form connection with timeout
 //
 //********************************************************************************************
-unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength){
+unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength){
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }
@@ -462,6 +450,7 @@ unsigned char TcpReceiveData(unsigned char *buffer, const unsigned char connecti
   return 0;
  }
  unsigned short waiting = 0;
+ unsigned char *buffer = NetGetBuffer();
  for(;;){
   if(TcpWaitPacket(buffer, connection, 0, TCP_FLAG_ACK_V)){
    *data = buffer + TcpGetDataPosition(buffer);
@@ -509,7 +498,7 @@ static unsigned char TcpClose(unsigned char *buffer, TcpConnection *connection, 
 // Description : close active connection client or server side (send fin packet and synchronous waiting for all packet with timeout)
 //
 //********************************************************************************************
-unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connectionId, const unsigned short timeout){
+unsigned char TcpDiconnect(const unsigned char connectionId, const unsigned short timeout){
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }
@@ -517,6 +506,7 @@ unsigned char TcpDiconnect(unsigned char *buffer, const unsigned char connection
   return 0;
  }
  connections[connectionId].state = TCP_STATE_DYEING;
+ unsigned char *buffer = NetGetBuffer();
  TcpClose(buffer, connections + connectionId, 900);
  unsigned short waiting = 900;
  for(;;){
@@ -613,9 +603,9 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
  unsigned char data[100];
  unsigned char *data1;
  memcpy(data, buffer + TcpGetDataPosition(buffer), length);
- TcpSendData(buffer, conId, 5000, data, length);
- UdpSendData(buffer, connections[conId].ip, 5000, 6000, data, length);
- unsigned char result = UdpReceiveData(buffer, connections[conId].ip, 5000, 6000, 30000, &data1, &length);
+ TcpSendData(conId, 5000, data, length);
+ UdpSendData(connections[conId].ip, 5000, 6000, data, length);
+ unsigned char result = UdpReceiveData(connections[conId].ip, 5000, 6000, 30000, &data1, &length);
  if(result){
   UARTWriteChars("UDP client Prichozi data '");
   UARTWriteCharsLength(data1, length);

@@ -225,7 +225,7 @@ unsigned char ArpWhoIs(unsigned char *buffer, const unsigned char destIp[IP_V4_A
    #endif
    return 1;
   }
-  NetHandleIncomingPacket(buffer, dlength);
+  NetHandleIncomingPacket(dlength);
  }
  return 0;
 }

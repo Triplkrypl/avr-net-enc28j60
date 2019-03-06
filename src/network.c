@@ -9,6 +9,7 @@
 #if defined(TCP) || defined(UDP)
 unsigned short connectPortRotaiting = NET_MIN_DINAMIC_PORT;
 #endif
+static unsigned char buffer[NET_BUFFER_SIZE];
 
 void NetInit() {
  enc28j60_init();
@@ -18,17 +19,20 @@ void NetInit() {
  #endif
 }
 
+unsigned char *NetGetBuffer(){
+ return buffer;
+}
+
 void NetHandleNetwork(){
  unsigned short length;
- unsigned char buffer[NET_BUFFER_SIZE];// todo skovat buffer do klihovny
  length = enc28j60_packet_receive(buffer, NET_BUFFER_SIZE);
  if(length == 0){
   return;
  }
- NetHandleIncomingPacket(buffer, length);
+ NetHandleIncomingPacket(length);
 }
 
-void NetHandleIncomingPacket(unsigned char *buffer, unsigned short length){
+void NetHandleIncomingPacket(unsigned short length){
  {
   unsigned char srcMac[MAC_ADDRESS_SIZE];
   memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
@@ -54,7 +58,7 @@ void NetHandleIncomingPacket(unsigned char *buffer, unsigned short length){
  }
  #endif
  #ifdef TCP
- if(TcpIsTcp(buffer)){
+ if(buffer[IP_PROTO_P] == IP_PROTO_TCP_V){
   TcpHandleIncomingPacket(buffer, length);
   return;
  }
