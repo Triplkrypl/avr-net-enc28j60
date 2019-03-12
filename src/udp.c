@@ -185,7 +185,7 @@ void UdpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
  datagram.port = CharsToShort(buffer + UDP_DST_PORT_H_P);
  datagram.remotePort = CharsToShort(buffer + UDP_SRC_PORT_H_P);
  unsigned char result = UdpOnIncomingDatagram(datagram, buffer + UDP_DATA_P, CharsToShort(buffer + UDP_LENGTH_P) - UDP_HEADER_LEN);
- if(result == UDP_HANDLE_RESULT_REJECT){
+ if(result == NET_HANDLE_RESULT_REJECT){
   IcmpSendUnreachable(buffer, datagram.mac, datagram.ip, CharsToShort(buffer + IP_TOTLEN_H_P));
  }
 }

@@ -25,7 +25,6 @@
 //
 //********************************************************************************************
 #include <string.h>
-#include <stdio.h> //todo vyhodit testovaci kod
 #include "arp.h"
 #include "tcp.h"
 #include "ip.h"
@@ -380,8 +379,9 @@ unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsig
   if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_SYN_V | TCP_FLAG_ACK_V)){
    unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
    connection->maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
-   TcpSendAck(buffer, connection, connection->expectedSequence, 1);// todo callback na nove spojeni
+   TcpSendAck(buffer, connection, connection->expectedSequence, 1);
    connection->state = TCP_STATE_ESTABLISHED;
+   TcpOnConnect(connectionId);
    return connectionId;
   }
   waiting++;
@@ -491,7 +491,7 @@ static unsigned char TcpClose(unsigned char *buffer, TcpConnection *connection, 
  }
  return 1;
 }
-// todo vyresit zavolani callbacku pro konec
+
 //********************************************************************************************
 //
 // Function : TcpDiconnect
@@ -506,6 +506,7 @@ unsigned char TcpDiconnect(const unsigned char connectionId, const unsigned shor
   return 0;
  }
  connections[connectionId].state = TCP_STATE_DYEING;
+ TcpOnDisconnect(connectionId);
  unsigned char *buffer = NetGetBuffer();
  TcpClose(buffer, connections + connectionId, 900);
  unsigned short waiting = 900;
@@ -523,7 +524,6 @@ unsigned char TcpDiconnect(const unsigned char connectionId, const unsigned shor
  return 1;
 }
 
-// todo odebrat testovaci kod
 //********************************************************************************************
 //
 // Function : TcpHandleIncomingPacket
@@ -531,85 +531,58 @@ unsigned char TcpDiconnect(const unsigned char connectionId, const unsigned shor
 //
 //********************************************************************************************
 void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
- char out[100];
- unsigned char conId = TcpGetConnectionId(buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P), buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V);
- if(conId == TCP_INVALID_CONNECTION_ID){
+ unsigned char connectionId = TcpGetConnectionId(buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P), buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V);
+ if(connectionId == TCP_INVALID_CONNECTION_ID){
   return;
  }
- sprintf(out, "Id conId %u state %u port %u remote port %u\n", conId, connections[conId].state, connections[conId].port, connections[conId].remotePort);
- UARTWriteChars(out);
- sprintf(out, "Sec conection %lu\n", connections[conId].sendSequence);
- UARTWriteChars(out);
- sprintf(out, "Expected Sec conection %lu\n", connections[conId].expectedSequence);
- UARTWriteChars(out);
- sprintf(out, "Max segmet size %u\n", connections[conId].maxSegmetSize);
- UARTWriteChars(out);
- if((buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V) && (connections[conId].state == TCP_STATE_NEW || connections[conId].state == TCP_STATE_SYN_RECEIVED)){
-  if(connections[conId].state == TCP_STATE_NEW){
-   if(connections[conId].port != 80){
-    IcmpSendUnreachable(buffer, connections[conId].mac, connections[conId].ip, CharsToShort(buffer + IP_TOTLEN_H_P));
-    connections[conId].state = TCP_STATE_NO_CONNECTION;
-    return;// todo neocekavany prichozi port zatim dropujem, vyresit icmp s odmitnutim
+ // handle new connection
+ if((buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V) && (connections[connectionId].state == TCP_STATE_NEW || connections[connectionId].state == TCP_STATE_SYN_RECEIVED)){
+  if(connections[connectionId].state == TCP_STATE_NEW){
+   unsigned char result = TcpOnNewConnection(connectionId);
+   if(result == NET_HANDLE_RESULT_DROP){
+    connections[connectionId].state = TCP_STATE_NO_CONNECTION;
+    return;
    }
-   // todo pridani callbacku nove spojeni
+   if(result == NET_HANDLE_RESULT_REJECT){
+    IcmpSendUnreachable(buffer, connections[connectionId].mac, connections[connectionId].ip, CharsToShort(buffer + IP_TOTLEN_H_P));
+    connections[connectionId].state = TCP_STATE_NO_CONNECTION;
+    return;
+   }
   }
-  connections[conId].state = TCP_STATE_SYN_RECEIVED;
-  connections[conId].expectedSequence = CharsToLong(buffer + TCP_SEQ_P) + 1;
-  connections[conId].sendSequence = 2;
+  connections[connectionId].state = TCP_STATE_SYN_RECEIVED;
+  connections[connectionId].expectedSequence = CharsToLong(buffer + TCP_SEQ_P) + 1;
+  connections[connectionId].sendSequence = 2;
   unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
-  connections[conId].maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
-  sprintf(out, "SYN packet\n");
-  UARTWriteChars(out);
-  TcpSendPacket(buffer, connections[conId], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
+  connections[connectionId].maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
+  TcpSendPacket(buffer, connections[connectionId], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
   return;
  }
- if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && connections[conId].state == TCP_STATE_SYN_RECEIVED){
-  sprintf(out, "Established packet\n");
-  UARTWriteChars(out);
-  connections[conId].state = TCP_STATE_ESTABLISHED;
-  connections[conId].sendSequence = CharsToLong(buffer + TCP_SEQACK_P);
+ if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && connections[connectionId].state == TCP_STATE_SYN_RECEIVED){
+  connections[connectionId].state = TCP_STATE_ESTABLISHED;
+  connections[connectionId].sendSequence = CharsToLong(buffer + TCP_SEQACK_P);
+  TcpOnConnect(connectionId);
  }
  // handle connection close
- if((buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && (connections[conId].state == TCP_STATE_ESTABLISHED || connections[conId].state == TCP_STATE_DYEING)){
-  if(!TcpSendAck(buffer, connections + conId, CharsToLong(buffer + TCP_SEQ_P), 1)){
+ if((buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && (connections[connectionId].state == TCP_STATE_ESTABLISHED || connections[connectionId].state == TCP_STATE_DYEING)){
+  if(!TcpSendAck(buffer, connections + connectionId, CharsToLong(buffer + TCP_SEQ_P), 1)){
    return;
   }
-  sprintf(out, "Zadost o konec \n");
-  UARTWriteChars(out);
-  connections[conId].state = TCP_STATE_DYEING;
-  // todo pridat callback na ukoncene spojeni
-  TcpClose(buffer, connections + conId, 900);
-  connections[conId].state = TCP_STATE_NO_CONNECTION;
-  sprintf(out, "Konec\n");
-  UARTWriteChars(out);
+  connections[connectionId].state = TCP_STATE_DYEING;
+  TcpOnDisconnect(connectionId);
+  TcpClose(buffer, connections + connectionId, 1000);
+  connections[connectionId].state = TCP_STATE_NO_CONNECTION;
  }
- if(connections[conId].state != TCP_STATE_ESTABLISHED){
+ if(connections[connectionId].state != TCP_STATE_ESTABLISHED){
   return;
  }
  length = TcpGetDataLength(buffer);
- sprintf(out, "Delka dat %u\n", length);
- UARTWriteChars(out);
  // handle incoming data packet
  if(length == 0){
   return;
  }
- if(!TcpSendAck(buffer, connections + conId, CharsToLong(buffer + TCP_SEQ_P), length)){
+ if(!TcpSendAck(buffer, connections + connectionId, CharsToLong(buffer + TCP_SEQ_P), length)){
   return;
  }
- // todo pridani callbacku na prichozi data
- UARTWriteChars("Prichozi data '");
- UARTWriteCharsLength(buffer + TcpGetDataPosition(buffer), length);
- UARTWriteChars("'\n");
- unsigned char data[100];
- unsigned char *data1;
- memcpy(data, buffer + TcpGetDataPosition(buffer), length);
- TcpSendData(conId, 5000, data, length);
- UdpSendData(connections[conId].ip, 5000, 6000, data, length);
- unsigned char result = UdpReceiveData(connections[conId].ip, 5000, 6000, 30000, &data1, &length);
- if(result){
-  UARTWriteChars("UDP client Prichozi data '");
-  UARTWriteCharsLength(data1, length);
-  UARTWriteChars("'\n");
- }
+ TcpOnIncomingData(connectionId, buffer + TcpGetDataPosition(buffer), length);
  return;
 }

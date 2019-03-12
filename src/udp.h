@@ -41,10 +41,6 @@
 #define UDP_CHECKSUM_L_P	0x29
 #define UDP_DATA_P			0x2A
 
-#define UDP_HANDLE_RESULT_OK       0
-#define UDP_HANDLE_RESULT_DROP     0
-#define UDP_HANDLE_RESULT_REJECT   0
-
 typedef struct{
  unsigned short port;
  unsigned short remotePort;

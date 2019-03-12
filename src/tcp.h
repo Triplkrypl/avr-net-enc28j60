@@ -94,4 +94,8 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
 unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 unsigned char TcpDiconnect(const unsigned char connectionId, const unsigned short timeout);
 void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length);
+unsigned char TcpOnNewConnection(const unsigned char connectionId);
+void TcpOnConnect(const unsigned char connectionId);
+void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength);
+void TcpOnDisconnect(const unsigned char connectionId);
 #endif
