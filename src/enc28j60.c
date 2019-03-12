@@ -24,7 +24,6 @@
 // http://www.gnu.de/gpl-ger.html
 //
 //********************************************************************************************
-#include "struct.h"
 #include "enc28j60.h"
 //
 
@@ -33,16 +32,15 @@
 //	unsigned rx_buffer_is_free:1;
 //	unsigned unuse:7;
 //}enc28j60_flag;
-static BYTE Enc28j60Bank;
-static WORD_BYTES next_packet_ptr;
+static unsigned char Enc28j60Bank;
+static unsigned short next_packet_ptr;
 const unsigned char avr_mac[MAC_ADDRESS_SIZE] = {NET_MAC};
 //*******************************************************************************************
 //
-// Function : icmp_send_request
-// Description : Send ARP request packet to destination.
+// Function : enc28j60ReadOp
 //
 //*******************************************************************************************
-BYTE enc28j60ReadOp(BYTE op, BYTE address)
+unsigned char enc28j60ReadOp(unsigned char op, unsigned char address)
 {
 	// activate CS
 	CSACTIVE;
@@ -68,7 +66,7 @@ BYTE enc28j60ReadOp(BYTE op, BYTE address)
 // Description : Send ARP request packet to destination.
 //
 //*******************************************************************************************
-void enc28j60WriteOp(BYTE op, BYTE address, BYTE data)
+void enc28j60WriteOp(unsigned char op, unsigned char address, unsigned char data)
 {
 	CSACTIVE;
 	// issue write command
@@ -85,7 +83,7 @@ void enc28j60WriteOp(BYTE op, BYTE address, BYTE data)
 // Description : Send ARP request packet to destination.
 //
 //*******************************************************************************************
-void enc28j60SetBank(BYTE address)
+void enc28j60SetBank(unsigned char address)
 {
 	// set the bank (if needed)
 	if((address & BANK_MASK) != Enc28j60Bank)
@@ -98,11 +96,10 @@ void enc28j60SetBank(BYTE address)
 }
 //*******************************************************************************************
 //
-// Function : icmp_send_request
-// Description : Send ARP request packet to destination.
+// Function : enc28j60Read
 //
 //*******************************************************************************************
-BYTE enc28j60Read(BYTE address)
+unsigned char enc28j60Read(unsigned char address)
 {
 	// select bank to read
 	enc28j60SetBank(address);
@@ -116,7 +113,7 @@ BYTE enc28j60Read(BYTE address)
 // Description : Send ARP request packet to destination.
 //
 //*******************************************************************************************
-void enc28j60Write(BYTE address, BYTE data)
+void enc28j60Write(unsigned char address, unsigned char data)
 {
 	// select bank to write
 	enc28j60SetBank(address);
@@ -126,13 +123,12 @@ void enc28j60Write(BYTE address, BYTE data)
 }
 //*******************************************************************************************
 //
-// Function : icmp_send_request
-// Description : Send ARP request packet to destination.
+// Function : enc28j60_read_phyreg
 //
 //*******************************************************************************************
-WORD enc28j60_read_phyreg(BYTE address)
+unsigned short enc28j60_read_phyreg(unsigned char address)
 {
-	WORD data;
+	unsigned short data;
 
 	// set the PHY register address
 	enc28j60Write(MIREGADR, address);
@@ -153,17 +149,16 @@ WORD enc28j60_read_phyreg(BYTE address)
 }
 //*******************************************************************************************
 //
-// Function : icmp_send_request
-// Description : Send ARP request packet to destination.
+// Function : enc28j60PhyWrite
 //
 //*******************************************************************************************
-void enc28j60PhyWrite(BYTE address, WORD_BYTES data)
+void enc28j60PhyWrite(unsigned char address, unsigned short data)
 {
 	// set the PHY register address
 	enc28j60Write(MIREGADR, address);
 	// write the PHY data
-	enc28j60Write(MIWRL, data.byte.low);
-	enc28j60Write(MIWRH, data.byte.high);
+	enc28j60Write(MIWRL, Low(data));
+	enc28j60Write(MIWRH, High(data));
 	// wait until the PHY write completes
 	while(enc28j60Read(MISTAT) & MISTAT_BUSY)
 	{
@@ -198,7 +193,7 @@ void enc28j60_init()
 	ENC28J60_PORT |= _BV(ENC28J60_RESET_PIN);
 	_delay_ms(200);
 
-    //
+    // todo pridat povine define pro nastaveni pinu
 	DDRB  |= _BV( 2 ) | _BV( 3 ) | _BV( 5 ); // output pin: 10 CS, 11 SI, 12 SO, 13 SCK
 	//DDRB &= ~_BV( ENC28J60_SO_PIN_DDR ); // input
 
@@ -222,7 +217,7 @@ void enc28j60_init()
 	// initialize receive buffer
 	// 16-bit transfers, must write low byte first
 	// set receive buffer start address
-	next_packet_ptr.word = RXSTART_INIT;
+	next_packet_ptr = RXSTART_INIT;
     // Rx start
 	enc28j60Write(ERXSTL, RXSTART_INIT&0xFF);
 	enc28j60Write(ERXSTH, RXSTART_INIT>>8);
@@ -283,12 +278,12 @@ void enc28j60_init()
 	enc28j60Write(MAADR0, avr_mac[5]);
 
 	// no loopback of transmitted frames
-	enc28j60PhyWrite(PHCON2, (WORD_BYTES){PHCON2_HDLDIS});
+	enc28j60PhyWrite(PHCON2, PHCON2_HDLDIS);
 
 	// Magjack leds configuration, see enc28j60 datasheet, page 11
 	// 0x476 is PHLCON LEDA=links status, LEDB=receive/transmit
 	// enc28j60PhyWrite(PHLCON,0b0000 0100 0111 00 10);
-	enc28j60PhyWrite(PHLCON,(WORD_BYTES){0x0472});
+	enc28j60PhyWrite(PHLCON, 0x0472);
 
 	// do bank 1 stuff, packet filter:
 	// For broadcast packets we allow only ARP packtets
@@ -326,7 +321,7 @@ void enc28j60_init()
 // Description : read the revision of the chip.
 //
 //*******************************************************************************************
-BYTE enc28j60getrev(void)
+unsigned char enc28j60getrev(void)
 {
 	return(enc28j60Read(EREVID));
 }
@@ -336,7 +331,7 @@ BYTE enc28j60getrev(void)
 // Description : Send packet to network.
 //
 //*******************************************************************************************
-void enc28j60_packet_send ( BYTE *buffer, unsigned short length )
+void enc28j60_packet_send ( unsigned char *buffer, unsigned short length )
 {
 	//Set the write pointer to start of transmit buffer area
 	enc28j60Write(EWRPTL, Low(TXSTART_INIT));
@@ -392,10 +387,9 @@ BYTE enc28j60_mac_is_linked(void)
 // Description : check received packet and return length of data
 //
 //*******************************************************************************************
-//WORD data_length;
-WORD enc28j60_packet_receive ( BYTE *rxtx_buffer, WORD max_length )
+unsigned short enc28j60_packet_receive ( unsigned char *rxtx_buffer, unsigned short max_length )
 {
-	WORD_BYTES rx_status, data_length;
+	unsigned short rx_status, data_length;
 
 	// check if a packet has been received and buffered
 	// if( !(enc28j60Read(EIR) & EIR_PKTIF) ){
@@ -406,46 +400,46 @@ WORD enc28j60_packet_receive ( BYTE *rxtx_buffer, WORD max_length )
 	}
 
 	// Set the read pointer to the start of the received packet
-	enc28j60Write(ERDPTL, next_packet_ptr.bytes[0]);
-	enc28j60Write(ERDPTH, next_packet_ptr.bytes[1]);
+	enc28j60Write(ERDPTL, Low(next_packet_ptr));
+	enc28j60Write(ERDPTH, High(next_packet_ptr));
 
 	// read the next packet pointer
-	next_packet_ptr.bytes[0] = enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0);
-	next_packet_ptr.bytes[1] = enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0);
+    LowPut(&next_packet_ptr, enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0));
+    HighPut(&next_packet_ptr, enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0));
 
 	// read the packet length (see datasheet page 43)
-	data_length.bytes[0] = enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0);
-	data_length.bytes[1] = enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0);
-	data_length.word -=4; //remove the CRC count
+	LowPut(&data_length, enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0));
+	HighPut(&data_length, enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0));
+	data_length -=4; //remove the CRC count
 
 	// read the receive status (see datasheet page 43)
-	rx_status.bytes[0] = enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0);
-	rx_status.bytes[1] = enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0);
+	LowPut(&rx_status, enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0));
+	HighPut(&rx_status, enc28j60ReadOp(ENC28J60_READ_BUF_MEM, 0));
 
-	if ( data_length.word > (max_length-1) )
+	if ( data_length > (max_length-1) )
 	{
-		data_length.word = max_length-1;
+		data_length = max_length-1;
 	}
 
 	// check CRC and symbol errors (see datasheet page 44, table 7-3):
 	// The ERXFCON.CRCEN is set by default. Normally we should not
 	// need to check this.
-	if ( (rx_status.word & 0x80)==0 )
+	if ( (rx_status & 0x80)==0 )
 	{
 		// invalid
-		data_length.word = 0;
+		data_length = 0;
 	}
 	else
 	{
 		// read data from rx buffer and save to rxtx_buffer
-		rx_status.word = data_length.word;
+		rx_status = data_length;
 		CSACTIVE;
 		// issue read command
 		SPDR = ENC28J60_READ_BUF_MEM;
 		waitspi();
-		while(rx_status.word)
+		while(rx_status)
 		{
-			rx_status.word--;
+			rx_status--;
 			SPDR = 0x00;
 			waitspi();
 			*rxtx_buffer++ = SPDR;
@@ -455,12 +449,12 @@ WORD enc28j60_packet_receive ( BYTE *rxtx_buffer, WORD max_length )
 
 	// Move the RX read pointer to the start of the next received packet
 	// This frees the memory we just read out
-	enc28j60Write(ERXRDPTL, next_packet_ptr.bytes[0]);
-	enc28j60Write(ERXRDPTH, next_packet_ptr.bytes[1]);
+	enc28j60Write(ERXRDPTL, Low(next_packet_ptr));
+	enc28j60Write(ERXRDPTH, High(next_packet_ptr));
 
 	// decrement the packet counter indicate we are done with this packet
 	enc28j60WriteOp(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_PKTDEC);
 
-	return( data_length.word );
+	return data_length;
 }
 

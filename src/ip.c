@@ -51,7 +51,7 @@
 // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 //
 //********************************************************************************************
-static WORD_BYTES ip_identfier=(WORD_BYTES){1};
+static unsigned short ip_identfier=1;
 //********************************************************************************************
 //
 // Function : ip_generate_packet
@@ -69,9 +69,9 @@ void ip_generate_header(unsigned char *buffer, unsigned short totalLength, unsig
     CharsPutShort(buffer + IP_TOTLEN_H_P, totalLength);
 
 	// set packet identification
-	buffer [ IP_ID_H_P ] = ip_identfier.byte.high;
-	buffer [ IP_ID_L_P ] = ip_identfier.byte.low;
-	ip_identfier.word++;
+	buffer [ IP_ID_H_P ] = High(ip_identfier);
+	buffer [ IP_ID_L_P ] = Low(ip_identfier);
+	ip_identfier++;
 
 	// set fragment flags
 	buffer [ IP_FLAGS_H_P ] = 0x00;
@@ -97,11 +97,11 @@ void ip_generate_header(unsigned char *buffer, unsigned short totalLength, unsig
 }
 //********************************************************************************************
 //
-// Function : ip_check_ip
+// Function : ip_packet_is_ip
 // Description : Check incoming packet
 //
 //********************************************************************************************
-BYTE ip_packet_is_ip(BYTE *rxtx_buffer){
+unsigned char ip_packet_is_ip(unsigned char *rxtx_buffer){
  if(rxtx_buffer[ ETH_TYPE_H_P ] != ETH_TYPE_IP_H_V || rxtx_buffer[ ETH_TYPE_L_P ] != ETH_TYPE_IP_L_V){
   return 0;
  }

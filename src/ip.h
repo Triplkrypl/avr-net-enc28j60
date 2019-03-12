@@ -60,7 +60,6 @@
 //void ip_fill_ip_address( unsigned char *buf, unsigned char *avr_ip, unsigned char *dest_ip );
 //void ip_fill_hdr_checksum( unsigned char *buf );
 
-// todo refactor
 unsigned char ip_packet_is_ip(unsigned char *buffer);
 void ip_generate_header(unsigned char *buffer, unsigned short totalLength, unsigned char protocol, const unsigned char *destIp);
 #endif

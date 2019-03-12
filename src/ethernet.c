@@ -109,7 +109,7 @@ unsigned short software_checksum(unsigned char *rxtx_buffer, unsigned short len,
 		sum = (sum & 0xFFFF)+(sum >> 16);
 	}
 	// build 1's complement:
-	return( (WORD) sum ^ 0xFFFF);
+	return( (unsigned short) sum ^ 0xFFFF);
 }
 
 unsigned char EthCheckType(const unsigned char *rxtx_buffer, const unsigned short type){

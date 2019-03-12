@@ -97,7 +97,7 @@ void ArpInit(){
 // Description : generate arp packet
 //
 //********************************************************************************************
-static void arp_generate_packet( BYTE *rxtx_buffer, BYTE *dest_mac, const unsigned char *dest_ip ){
+static void arp_generate_packet( unsigned char *rxtx_buffer, unsigned char *dest_mac, const unsigned char *dest_ip ){
  // setup hardware type to ethernet 0x0001
  rxtx_buffer[ ARP_HARDWARE_TYPE_H_P ] = ARP_HARDWARE_TYPE_H_V;
  rxtx_buffer[ ARP_HARDWARE_TYPE_L_P ] = ARP_HARDWARE_TYPE_L_V;
@@ -143,11 +143,11 @@ static void arp_send_request(unsigned char *rxtx_buffer, const unsigned char *de
 
 //*******************************************************************************************
 //
-// Function : arp_packet_is_arp
+// Function : ArpPacketIsArp
 // Description : check received packet, that packet is match with arp and avr ip or not?
 //
 //*******************************************************************************************
-unsigned char arp_packet_is_arp(unsigned char *rxtx_buffer, unsigned short opcode){
+unsigned char ArpPacketIsArp ( unsigned char *rxtx_buffer, unsigned short opcode ){
  // if packet type is not arp packet exit from function
  if( rxtx_buffer[ ETH_TYPE_H_P ] != ETH_TYPE_ARP_H_V || rxtx_buffer[ ETH_TYPE_L_P ] != ETH_TYPE_ARP_L_V){
   return 0;
@@ -162,11 +162,11 @@ unsigned char arp_packet_is_arp(unsigned char *rxtx_buffer, unsigned short opcod
 
 //*******************************************************************************************
 //
-// Function : arp_send_reply
+// Function : ArpSendReply
 // Description : Send reply if recieved packet is ARP and IP address is match with avr_ip
 //
 //*******************************************************************************************
-void arp_send_reply(unsigned char *rxtx_buffer, unsigned char *dest_mac){
+void ArpSendReply ( unsigned char *rxtx_buffer, unsigned char *dest_mac ){
 	// generate ethernet header
 	eth_generate_header(rxtx_buffer, ETH_TYPE_ARP_V, dest_mac);
 
@@ -212,7 +212,7 @@ unsigned char ArpWhoIs(unsigned char *buffer, const unsigned char destIp[IP_V4_A
  arp_send_request(buffer, destIp);
  dlength = EthWaitPacket(buffer, ETH_TYPE_ARP_V, 100);
  if(dlength != 0){
-  if(arp_packet_is_arp(buffer, ARP_OPCODE_REPLY_V)){
+  if(ArpPacketIsArp(buffer, ARP_OPCODE_REPLY_V)){
    // copy destination mac address from arp reply packet to destination mac address
    memcpy(destMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
    #if NET_ARP_CACHE_SIZE > 0

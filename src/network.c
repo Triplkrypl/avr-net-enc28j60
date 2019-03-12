@@ -36,8 +36,8 @@ void NetHandleIncomingPacket(unsigned short length){
  {
   unsigned char srcMac[MAC_ADDRESS_SIZE];
   memcpy(srcMac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
-  if(arp_packet_is_arp(buffer, ARP_OPCODE_REQUEST_V)){
-   arp_send_reply(buffer, srcMac);
+  if(ArpPacketIsArp(buffer, ARP_OPCODE_REQUEST_V)){
+   ArpSendReply(buffer, srcMac);
    return;
   }
   if(!ip_packet_is_ip(buffer)){

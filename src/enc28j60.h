@@ -283,18 +283,18 @@
 #define MAC_ADDRESS_SIZE 6
 
 // functions
-BYTE enc28j60ReadOp(BYTE op, BYTE address);
-void enc28j60WriteOp(BYTE op, BYTE address, BYTE data);
-void enc28j60SetBank(BYTE address);
-BYTE enc28j60Read(BYTE address);
-void enc28j60Write(BYTE address, BYTE data);
-WORD enc28j60_read_phyreg(BYTE address);
-void enc28j60PhyWrite(BYTE address, WORD_BYTES data);
+unsigned char enc28j60ReadOp(unsigned char op, unsigned char address);
+void enc28j60WriteOp(unsigned char op, unsigned char address, unsigned char data);
+void enc28j60SetBank(unsigned char address);
+unsigned char enc28j60Read(unsigned char address);
+void enc28j60Write(unsigned char address, unsigned char data);
+unsigned short enc28j60_read_phyreg(unsigned char address);
+void enc28j60PhyWrite(unsigned char address, unsigned short data);
 void enc28j60_init();
-BYTE enc28j60getrev(void);
-void enc28j60_packet_send ( BYTE *buffer, unsigned short length);
-BYTE enc28j60_mac_is_linked(void);
-WORD enc28j60_tx_checksum( WORD offset, WORD len );
-WORD enc28j60_packet_receive ( BYTE *rxtx_buffer, WORD max_length );
+unsigned char enc28j60getrev(void);
+void enc28j60_packet_send ( unsigned char *buffer, unsigned short length);
+unsigned char enc28j60_mac_is_linked(void);
+unsigned short enc28j60_tx_checksum( unsigned short offset, unsigned short len );
+unsigned short enc28j60_packet_receive ( unsigned char *rxtx_buffer, unsigned short max_length );
 
 #endif

@@ -69,7 +69,7 @@
 //
 //********************************************************************************************
 void ArpInit();
-void arp_send_reply ( BYTE *rxtx_buffer, BYTE *dest_mac );// todo refactor
-BYTE arp_packet_is_arp ( BYTE *rxtx_buffer, unsigned short opcode );// todo refactor
+void ArpSendReply ( unsigned char *rxtx_buffer, unsigned char *dest_mac );
+unsigned char ArpPacketIsArp ( unsigned char *rxtx_buffer, unsigned short opcode );
 unsigned char ArpWhoIs(unsigned char *buffer, const unsigned char destIp[IP_V4_ADDRESS_SIZE], unsigned char destMac[MAC_ADDRESS_SIZE]);
 #endif

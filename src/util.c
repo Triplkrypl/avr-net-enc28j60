@@ -8,6 +8,14 @@ inline unsigned char High(unsigned short value){
  return ((value>>8)&0xFF);
 }
 
+inline void LowPut(unsigned short *value, const unsigned char ch){
+ ((unsigned char*)value)[0] = ch;
+}
+
+inline void HighPut(unsigned short *value, const unsigned char ch){
+ ((unsigned char*)value)[1] = ch;
+}
+
 inline unsigned short CharsToShort(const unsigned char *value){
  unsigned short numericValue;
  ((unsigned char*)&numericValue)[1] = value[0];
