@@ -193,12 +193,12 @@ void enc28j60_init()
 	ENC28J60_PORT |= _BV(ENC28J60_RESET_PIN);
 	_delay_ms(200);
 
-    // todo pridat povine define pro nastaveni pinu
-	DDRB  |= _BV( 2 ) | _BV( 3 ) | _BV( 5 ); // output pin: 10 CS, 11 SI, 12 SO, 13 SCK
-	//DDRB &= ~_BV( ENC28J60_SO_PIN_DDR ); // input
+    // set SPI anc CS I/O pins
+	ENC28J60_DDR |= _BV(ENC28J60_CS_PIN_DDR) | _BV(ENC28J60_SI_PIN_DDR) | _BV(ENC28J60_SCK_PIN_DDR); // output pin
+	ENC28J60_DDR &= ~_BV(ENC28J60_SO_PIN_DDR); // input pin
 
 	CSPASSIVE;
-	PORTB &= ~(_BV( 3 ) | _BV( 5 ) );
+	ENC28J60_PORT &= ~(_BV(ENC28J60_SI_PIN) | _BV(ENC28J60_SCK_PIN));
 	//
 	// initialize SPI interface
 	// master mode and Fosc/2 clock:

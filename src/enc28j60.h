@@ -27,13 +27,6 @@
 //
 //********************************************************************************************
 
-#define ENC28J60_RESET_PIN_DDR	DDD3
-#define ENC28J60_INT_PIN_DDR	DDD2
-#define ENC28J60_RESET_PIN		PD3
-#define ENC28J60_INT_PIN		PD2
-#define ENC28J60_PORT			PORTD
-#define ENC28J60_DDR			DDRD
-
 // ENC28J60 Control Registers
 // Control register definitions are a combination of address,
 // bank number, and Ethernet/MAC/PHY indicator bits.
@@ -258,9 +251,9 @@
 #define ENC28J60_SOFT_RESET          0xFF
 
 // set CS to 0 = active
-#define CSACTIVE PORTB &= ~_BV(2) //pin 10
+#define CSACTIVE ENC28J60_PORT &= ~_BV(ENC28J60_CS_PIN)
 // set CS to 1 = passive
-#define CSPASSIVE PORTB |= _BV(2) //pin 10
+#define CSPASSIVE ENC28J60_PORT |= _BV(ENC28J60_CS_PIN)
 //
 #define waitspi() while(!(SPSR&(1<<SPIF)))
 
