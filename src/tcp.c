@@ -494,11 +494,11 @@ static unsigned char TcpClose(unsigned char *buffer, TcpConnection *connection, 
 
 //********************************************************************************************
 //
-// Function : TcpDiconnect
+// Function : TcpDisconnect
 // Description : close active connection client or server side (send fin packet and synchronous waiting for all packet with timeout)
 //
 //********************************************************************************************
-unsigned char TcpDiconnect(const unsigned char connectionId, const unsigned short timeout){
+unsigned char TcpDisconnect(const unsigned char connectionId, const unsigned short timeout){
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }

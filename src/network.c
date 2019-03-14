@@ -1,3 +1,5 @@
+#include <avr/io.h>
+#include <util/delay.h>
 #include <string.h>
 #include "util.c"
 #include "enc28j60.c"
