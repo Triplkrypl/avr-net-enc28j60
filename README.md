@@ -91,9 +91,9 @@ If you include tcp.c, you have to define functions callback TcpOnNewConnection, 
 // function called if new tcp client is connecting into AVR, it is like firewall,
 // library listen on all TCP ports you can specify witch port is accepted or not
 // you have to return:
-// NET_HANDLE_RESULT_DROP - drop new conenction without any response for sender
-// NET_HANDLE_RESULT_OK - accept new connection and allow established connection
-// NET_HANDLE_RESULT_REJECT - not allow established conenction and library send icmp unreachable packet
+// NET_HANDLE_RESULT_DROP drop new conenction without any response for sender
+// NET_HANDLE_RESULT_OK accept new connection and allow established connection
+// NET_HANDLE_RESULT_REJECT not allow established conenction and library send icmp unreachable packet
 unsigned char TcpOnNewConnection(const unsigned char connectionId){
  if(TcpGetConnection(connectionId)->port != 80){
   return NET_HANDLE_RESULT_DROP;
@@ -101,16 +101,19 @@ unsigned char TcpOnNewConnection(const unsigned char connectionId){
  return NET_HANDLE_RESULT_OK;
 }
 
-// function called after successful established any connection, server connection and client connection created by TcpConnect function
+// function called after successful established any connection
+// server connection and client connection created by TcpConnect function
 // purpose this callback s init any data or memory for new conenction before send data
 void TcpOnConnect(const unsigned char connectionId){
  // if you listen on more than one ports you always check port for execute correct logic
- // also if you use client connection from AVR anywhere check here you client conenction id for handle asynchronous communication
+ // also if you use client connection from AVR anywhere,
+ // check here you client conenction id for handle asynchronous communication
  if(TcpGetConnection(connectionId)->port == 80){
  }
 }
 
-// function called always if AVR receive any data from any connection, server reveive data form lient or client receive asynchronous data
+// function called always if AVR receive any data from any connection,
+// server receive data from client or client receive asynchronous data
 // data catched by synchronous wait is not send in this function
 void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength){
  // here always check port if you listen on multiple ports or use client connection with asynchronous responses
@@ -119,13 +122,14 @@ void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *da
  }
 }
 
-// function called after closed any connenction passively form other side or actively by TcpDisconnect function
-// it is nesesry for correct clear application memory affter any connenction ends
+// function called after closed any connenction passively from other side or actively by TcpDisconnect function
+// it is nesesry for correct clear application memory after any connenction ends
 // if you prepare any memory in TcpOnConnect callback clear it here
 void TcpOnDisconnect(const unsigned char connectionId){
  // always check port or client connection id here,
  // if you for diferet connenction type prepare diferent memory you have to know what you have to clear
- // use this callback even if you use synchonous wait for response, other side can close connenction asynchonously sooner than you expect
+ // use this callback even if you use synchonous wait for response,
+ // other side can close connenction asynchonously sooner than you expect
  if(TcpGetConnection(connectionId)->port == 80){
  }
 }
@@ -136,9 +140,10 @@ If you include udp.c, you have to define function callback UdpOnIncomingDatagram
 ```c
 // function called any time if any UPD datagram income into AVR except UDP datagram cathed by synchronous wait
 // you have to return:
-// NET_HANDLE_RESULT_DROP - inform library that your application code nothing do with datagram, nothing happened after that
-// NET_HANDLE_RESULT_OK - inform library that your application code do somethink with datagram, nothing happened after that
-// NET_HANDLE_RESULT_REJECT - inform library that your application code nothing do with datagram, after that library send unreachable icmp packet
+// NET_HANDLE_RESULT_DROP inform library that your application code nothing do with datagram, nothing happened after
+// NET_HANDLE_RESULT_OK inform library that your application code do somethink with datagram, nothing happened after
+// NET_HANDLE_RESULT_REJECT inform library that your application code nothing do with datagram
+// after that library send unreachable icmp packet
 unsigned char UdpOnIncomingDatagram(UdpDatagram datagram, const unsigned char *data, unsigned short dataLength){
  if(datagram->port == 5000){
   // do something
@@ -173,7 +178,8 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
 // return: 1 on success, 0 on any error
 unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 
-// actively close any TCP connection, you can disconnect inactive clients as server or client have to notify server that ending communication
+// actively close any TCP connection, you can disconnect inactive clients as server,
+// or client have to notify server that ending communication
 // return: 1 on success, 0 on any error
 unsigned char TcpDisconnect(const unsigned char connectionId, const unsigned short timeout);
 ```
@@ -196,11 +202,15 @@ unsigned short UdpSendData(const unsigned char *ip, const unsigned short remoteP
 
 // send data into any host, mac address is lookup and you specify only remotePort
 // port (srcPort in sended UDP datagram is incrementing UDP port)
-// this function is good for sending UDP request as client with synchronous waiting for response, you do not need store port value for long time
+// this function is good for sending UDP request as client with synchronous waiting for response,
+// you do not need store port value for long time
 // return:
-// on success port used as srcPort in sended UDP datagram (incrementing port, every sended UDP datagram rotate new port, also new client Tcp connection will cause incrementing)
+// on success port used as srcPort in sended UDP datagram
+// (incrementing port, every sended UDP datagram rotate new port,
+// also new client Tcp connection will cause incrementing)
 // on fail return 0
-// if you use this function instantly use UdpReceiveData for catch response with returned port value or you lose it forever
+// if you use this function instantly use UdpReceiveData for catch response with returned port value,
+// or you lose it forever
 unsigned short UdpSendDataTmpPort(const unsigned char *ip, const unsigned short remotePort, const unsigned char *data, const unsigned short dataLength);
 
 // synchronous wait for data from specify host with timeout
