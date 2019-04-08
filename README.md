@@ -60,7 +60,7 @@ If someone will recognize code with is not mine and will know repository i will 
 // lower value is RAM free
 #define TCP_MAX_CONNECTIONS 2
 
-// you have to define you cpu frequency because of delay.h library
+// you have to define your cpu frequency because of delay.h library
 #define F_CPU 16000000UL
 
 // include icmp.c if you want your AVR to response PING

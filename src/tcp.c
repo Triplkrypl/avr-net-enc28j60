@@ -25,9 +25,10 @@
 //
 //********************************************************************************************
 #include <string.h>
+#include "enc28j60.h"
+#include "ip.h"
 #include "arp.h"
 #include "tcp.h"
-#include "ip.h"
 #include "ethernet.h"
 #include "network.h"
 #include "util.c"
