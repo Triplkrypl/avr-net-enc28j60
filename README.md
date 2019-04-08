@@ -13,7 +13,19 @@ If someone will recognize code with is not mine and will know repository i will 
     * synchronous wait for packet if receive different packet than expected will send received packed in to main loop function for handle except drop
     * arp broadcast responses are cached
 
+## Requires
+
+* Hardware
+    * Some AVR microcontroller of course
+    * enc28j60 chip
+* Software
+    * [AVR library](https://www.nongnu.org/avr-libc/)
+
 ## Usage
+
+### Examples
+
+[Tcp synchronous not persistent client](example/tcp_synch_client/main.c) (not tested)
 
 ### General usage
 
