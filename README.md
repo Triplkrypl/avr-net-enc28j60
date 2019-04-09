@@ -25,7 +25,7 @@ If someone will recognize code with is not mine and will know repository i will 
 
 ### Examples
 
-[Tcp synchronous not persistent client](example/tcp_synch_client/main.c) (not tested)
+[Tcp synchronous not persistent client](example/tcp_synch_client/main.c)
 
 ### General usage
 
