@@ -27,6 +27,8 @@ If someone will recognize code with is not mine and will know repository i will 
 
 [Tcp synchronous not persistent client](example/tcp_synch_client/main.c)
 
+[Tcp asynchronous not persistent client](example/tcp_asynch_client/main.c)
+
 ### General usage
 
 ```c

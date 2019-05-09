@@ -79,7 +79,7 @@ void TcpOnDisconnect(const unsigned char connectionId){
 
 void TcpSynchNotPersitentClientExample(){
  unsigned char serverIp[IP_V4_ADDRESS_SIZE] = {192, 168, 0, 30};
- // client connect into server host (here example 192.168.0.30) and port 5000 with 5 second timeout
+ // client connect to server host (here example 192.168.0.30) and port 5000 with 6 second timeout
  unsigned char clientConId = TcpConnect(serverIp, 5000, 6000);
  // check if connect is success (can fail on timeout or if ip address not fount on local network)
  if(clientConId == TCP_INVALID_CONNECTION_ID){
