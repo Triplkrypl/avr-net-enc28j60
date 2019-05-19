@@ -116,7 +116,12 @@ unsigned char EthCheckType(const unsigned char *rxtx_buffer, const unsigned shor
  return ( rxtx_buffer[ ETH_TYPE_H_P ] == High(type) && rxtx_buffer[ ETH_TYPE_L_P ] == Low(type));
 }
 
-// toto pridat komentar
+//********************************************************************************************
+//
+// Function : EthWaitPacket
+// Description : synchronous waiting for any eth packet with milliseconds timeout
+//
+//********************************************************************************************
 unsigned short EthWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short timeout){
  unsigned short length;
  unsigned char microWaiting = 0;

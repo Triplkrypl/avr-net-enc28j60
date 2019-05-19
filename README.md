@@ -54,7 +54,7 @@ If someone will recognize code with is not mine and will know repository i will 
 
 // define IP, MAC address for you AVR
 #define NET_IP 192, 168, 0, 150
-#define NET_MAC 0x15, 0x16, 0x45, 0x89, 0x69, 0x99
+#define NET_MAC 0x15, 0x8, 0x45, 0x89, 0x69, 0x99
 // define RAM buffer size for network packets
 // this define maximum size of incoming packet,
 // define maximum size of sended packet,
