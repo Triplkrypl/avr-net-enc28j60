@@ -36,4 +36,24 @@ inline unsigned long CharsToLong(const unsigned char *value){
  ((unsigned char*)&numericValue)[0] = value[3];
  return numericValue;
 }
+
+unsigned char ParseLong(unsigned long *number, const unsigned char *ch, const unsigned short length){
+ if(length == 0){
+  return 0;
+ }
+ unsigned short i;
+ unsigned long decimalIndex = 1;
+ *number = 0;
+ for(i = length - 1;; i--){
+  if(ch[i] < '0' || ch[i] > '9'){
+   return 0;
+  }
+  *number += (ch[i] - '0') * decimalIndex;
+  decimalIndex *= 10;
+  if(i == 0){
+   break;
+  }
+ }
+ return 1;
+}
 #endif

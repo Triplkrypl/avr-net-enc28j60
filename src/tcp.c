@@ -404,6 +404,9 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }
+ if(dataLength == 0){
+  return 0;
+ }
  TcpConnection *connection = connections + connectionId;
  if(connection->state != TCP_STATE_ESTABLISHED){
   return 0;
