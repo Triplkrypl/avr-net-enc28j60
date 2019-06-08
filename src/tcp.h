@@ -92,7 +92,7 @@ const TcpConnection *TcpGetConnection(const unsigned char connectionId);
 unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short remotePort, const unsigned short timeout);
 unsigned char TcpSendData(const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
 unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
-unsigned char TcpDisconnect(const unsigned char connectionId, const unsigned short timeout);
+unsigned char TcpDisconnect(const unsigned char connectionId, unsigned short timeout);
 void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length);
 unsigned char TcpOnNewConnection(const unsigned char connectionId);
 void TcpOnConnect(const unsigned char connectionId);

@@ -197,7 +197,7 @@ unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned sh
 // actively close any TCP connection, you can disconnect inactive clients as server,
 // or client have to notify server that ending communication
 // return: 1 on success, 0 on any error
-unsigned char TcpDisconnect(const unsigned char connectionId, const unsigned short timeout);
+unsigned char TcpDisconnect(const unsigned char connectionId, unsigned short timeout);
 ```
 
 Functions from udp.c UdpSendDataMac, UdpSendData, UdpSendDataTmpPort, UdpReceiveData
