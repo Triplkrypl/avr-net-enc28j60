@@ -291,14 +291,21 @@ static unsigned char TcpGetEmptyConenctionId(){
  return TCP_INVALID_CONNECTION_ID;
 }
 
-static unsigned char TcpGetConnectionId(const unsigned char mac[MAC_ADDRESS_SIZE], const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short remotePort, const unsigned char firstPacket){
+//********************************************************************************************
+//
+// Function : TcpGetConnectionId
+// Description : get connection id for packet data
+//
+//********************************************************************************************
+static unsigned char TcpGetConnectionId(const unsigned char *buffer){
+ unsigned short port = CharsToShort(buffer + TCP_DST_PORT_P), remotePort = CharsToShort(buffer + TCP_SRC_PORT_P);
  unsigned char i;
  for(i=0;i<TCP_MAX_CONNECTIONS; i++){
-  if(TcpIsConnection(connections[i], mac, ip, port, remotePort)){
+  if(TcpIsConnection(connections[i], buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, port, remotePort)){
    return i;
   }
  }
- if(!firstPacket){
+ if(buffer[TCP_FLAGS_P] != TCP_FLAG_SYN_V){
   return TCP_INVALID_CONNECTION_ID;
  }
  i = TcpGetEmptyConenctionId();
@@ -308,8 +315,12 @@ static unsigned char TcpGetConnectionId(const unsigned char mac[MAC_ADDRESS_SIZE
  connections[i].state = TCP_STATE_NEW;
  connections[i].port = port;
  connections[i].remotePort = remotePort;
- memcpy(connections[i].mac, mac, MAC_ADDRESS_SIZE);
- memcpy(connections[i].ip, ip, IP_V4_ADDRESS_SIZE);
+ memcpy(connections[i].mac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE);
+ memcpy(connections[i].ip, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE);
+ connections[i].expectedSequence = CharsToLong(buffer + TCP_SEQ_P) + 1;
+ connections[i].sendSequence = 2;
+ unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
+ connections[i].maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
  return i;
 }
 
@@ -476,24 +487,20 @@ unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned sh
 // Description : send fin packet and wait for him ack packet
 //
 //********************************************************************************************
-static unsigned char TcpClose(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout){
- if(connection->state != TCP_STATE_DYEING){
-  return 0;
- }
+static void TcpClose(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout){
  unsigned short waiting = 0;
  for(;;){
   if(waiting % 300 == 0){
    TcpSendPacket(buffer, *connection, TCP_FLAG_FIN_V | TCP_FLAG_ACK_V, 0);
   }
   if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_ACK_V)){
-   return 1;
+   return;
   }
   waiting++;
   if(waiting > timeout){
    break;
   }
  }
- return 1;
 }
 
 //********************************************************************************************
@@ -502,7 +509,7 @@ static unsigned char TcpClose(unsigned char *buffer, TcpConnection *connection, 
 // Description : close active connection client or server side (send fin packet and synchronous waiting for all packet with timeout)
 //
 //********************************************************************************************
-unsigned char TcpDisconnect(const unsigned char connectionId, const unsigned short timeout){
+unsigned char TcpDisconnect(const unsigned char connectionId, unsigned short timeout){
  if(connectionId >= TCP_MAX_CONNECTIONS){
   return 0;
  }
@@ -510,21 +517,9 @@ unsigned char TcpDisconnect(const unsigned char connectionId, const unsigned sho
   return 0;
  }
  connections[connectionId].state = TCP_STATE_DYEING;
- TcpOnDisconnect(connectionId);
  unsigned char *buffer = NetGetBuffer();
- TcpClose(buffer, connections + connectionId, 900);
- unsigned short waiting = 900;
- for(;;){
-  if(TcpWaitPacket(buffer, connections + connectionId, 0, TCP_FLAG_FIN_V)){
-   TcpSendAck(buffer, connections + connectionId, connections[connectionId].expectedSequence, 1);
-   break;
-  }
-  waiting++;
-  if(waiting > timeout){
-   break;
-  }
- }
- connections[connectionId].state = TCP_STATE_NO_CONNECTION;
+ TcpOnDisconnect(connectionId);
+ TcpClose(buffer, connections + connectionId, timeout);
  return 1;
 }
 
@@ -535,7 +530,7 @@ unsigned char TcpDisconnect(const unsigned char connectionId, const unsigned sho
 //
 //********************************************************************************************
 void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
- unsigned char connectionId = TcpGetConnectionId(buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P), buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V);
+ unsigned char connectionId = TcpGetConnectionId(buffer);
  if(connectionId == TCP_INVALID_CONNECTION_ID){
   return;
  }
@@ -554,10 +549,6 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
    }
   }
   connections[connectionId].state = TCP_STATE_SYN_RECEIVED;
-  connections[connectionId].expectedSequence = CharsToLong(buffer + TCP_SEQ_P) + 1;
-  connections[connectionId].sendSequence = 2;
-  unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
-  connections[connectionId].maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
   TcpSendPacket(buffer, connections[connectionId], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
   return;
  }
@@ -571,9 +562,11 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
   if(!TcpSendAck(buffer, connections + connectionId, CharsToLong(buffer + TCP_SEQ_P), 1)){
    return;
   }
-  connections[connectionId].state = TCP_STATE_DYEING;
-  TcpOnDisconnect(connectionId);
-  TcpClose(buffer, connections + connectionId, 1000);
+  if(connections[connectionId].state == TCP_STATE_ESTABLISHED){
+   connections[connectionId].state = TCP_STATE_DYEING;
+   TcpOnDisconnect(connectionId);
+   TcpClose(buffer, connections + connectionId, 1000);
+  }
   connections[connectionId].state = TCP_STATE_NO_CONNECTION;
  }
  if(connections[connectionId].state != TCP_STATE_ESTABLISHED){
