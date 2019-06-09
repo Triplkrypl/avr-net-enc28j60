@@ -4,9 +4,6 @@
 
 #define HTTP_MAX_METHOD_LENGTH 10
 #define HTTP_MAX_VERSION_LENGTH 10
-#define HTTP_MAX_URL_LENGTH 50
-#define HTTP_MAX_HEADER_ROWS_LENGTH 150
-#define HTTP_MAX_DATA_LENGTH 255
 
 #define HTTP_REQUEST_STATE_NO_REQUEST 0
 #define HTTP_REQUEST_STATE_START_REQUEST 1
@@ -333,7 +330,13 @@ unsigned char HttpSendResponse(unsigned short statusCode, unsigned char *statusM
 //
 //*****************************************************************************************
 unsigned char TcpOnNewConnection(const unsigned char connectionId){
- if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT){//todo pridat cekajici spojeni kdyz se spracovava jinej http request
+ if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT){
+  if(incomingRequestState != HTTP_REQUEST_STATE_NO_REQUEST){
+   return NET_HANDLE_RESULT_DROP;
+  }
+  incomingRequestConnectionId = connectionId;
+  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
+  incomingRequestPosition = 0;
   return NET_HANDLE_RESULT_OK;
  }
  return NET_HANDLE_RESULT_DROP;
@@ -346,10 +349,7 @@ unsigned char TcpOnNewConnection(const unsigned char connectionId){
 //
 //*****************************************************************************************
 void TcpOnConnect(const unsigned char connectionId){
- if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT && incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST){
-  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
-  incomingRequestConnectionId = connectionId;
-  incomingRequestPosition = 0;
+ if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT){
   return;
  }
 }
@@ -361,11 +361,11 @@ void TcpOnConnect(const unsigned char connectionId){
 //
 //*****************************************************************************************
 void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength){
- if(TcpGetConnection(connectionId)->port != HTTP_SERVER_PORT || connectionId != incomingRequestConnectionId){
+ if(TcpGetConnection(connectionId)->port != HTTP_SERVER_PORT){
   return;
  }
- if(incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST){
-  TcpDisconnect(connectionId, 60000);
+ if(incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST || connectionId != incomingRequestConnectionId){
+  TcpDisconnect(connectionId, 5000);
   return;
  }
  // parse http headers
@@ -373,7 +373,7 @@ void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *da
  if(incomingRequestState < HTTP_REQUEST_STATE_END_HEADER){
   for(dataPosition=0; dataPosition<dataLength; dataPosition++){
    if(!HttpParseHeader(data[dataPosition])){
-    TcpDisconnect(connectionId, 60000);
+    TcpDisconnect(connectionId, 5000);
     return;
    }
    if(incomingRequestState == HTTP_REQUEST_STATE_END_HEADER){
@@ -392,18 +392,18 @@ void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *da
   const HttpHeaderValue contentLength = HttpParseHeaderValue(&incomingRequest, "Content-Length");
   if(!contentLength.value){
    HttpSendResponseHeader(connectionId, 411, 0, "", 0, 0);
-   TcpDisconnect(connectionId, 60000);
+   TcpDisconnect(connectionId, 5000);
    return;
   }
   unsigned long httpDataLength;
   if(!ParseLong(&httpDataLength, contentLength.value, contentLength.length)){
    HttpSendResponseHeader(connectionId, 400, "Header Content-Length Syntax Error", "", 0, 0);
-   TcpDisconnect(connectionId, 60000);
+   TcpDisconnect(connectionId, 5000);
    return;
   }
   if(httpDataLength > HTTP_MAX_DATA_LENGTH){
    HttpSendResponseHeader(connectionId, 413, 0, "", 0, 0);
-   TcpDisconnect(connectionId, 60000);
+   TcpDisconnect(connectionId, 5000);
    return;
   }
   dataLength -= dataPosition;
@@ -420,7 +420,7 @@ void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *da
   if(incomingRequestState != HTTP_REQUEST_STATE_RESPONSE_HEADER_SENT){
    HttpSendResponseHeader(connectionId, 204, 0, "", 0, 0);
   }
-  TcpDisconnect(connectionId, 60000);
+  TcpDisconnect(connectionId, 5000);
  }
  return;
 }
@@ -432,9 +432,12 @@ void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *da
 //
 //*****************************************************************************************
 void TcpOnDisconnect(const unsigned char connectionId){
- if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT && connectionId == incomingRequestConnectionId){
+ if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT){
+  if(connectionId != incomingRequestConnectionId || incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST){
+   return;
+  }
   incomingRequestConnectionId = TCP_INVALID_CONNECTION_ID;
-  incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;// todo pridat odpozastaveni cekajicich spojeni
+  incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;
   return;
  }
 }
