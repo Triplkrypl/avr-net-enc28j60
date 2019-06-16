@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
+// todo pretizeni tcp callbacku pro koexistovani http listeneru a moznots imlementovat jine protokoli soucasne
+
 #define HTTP_MAX_METHOD_LENGTH 10
 #define HTTP_MAX_VERSION_LENGTH 10
 
@@ -92,7 +94,7 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, un
    return 0;
   }
  }
- snprintf(staticHeaders, 52, "Content-Length: %u\r\n\r\n", dataLength);
+ snprintf(staticHeaders, 52, "Content-Length: %u\n\n", dataLength);
  if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
    return 0;
   }
@@ -386,7 +388,7 @@ void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *da
   }
  }
  // read request body
- if(strcmp(incomingRequest.method, "HEAD") == 0 || strcmp(incomingRequest.method, "GET") == 0){
+ if(strcmp(incomingRequest.method, "HEAD") == 0 || strcmp(incomingRequest.method, "GET") == 0 || strcmp(incomingRequest.method, "OPTIONS") == 0){
   incomingRequestState = HTTP_REQUEST_STATE_END_REQUEST;
  }else{
   const HttpHeaderValue contentLength = HttpParseHeaderValue(&incomingRequest, "Content-Length");

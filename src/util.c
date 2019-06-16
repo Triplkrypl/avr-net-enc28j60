@@ -1,5 +1,8 @@
 #ifndef UTIL
 #define UTIL
+
+#include <string.h>
+
 inline unsigned char Low(unsigned short value){
  return (value&0xFF);
 }
@@ -55,5 +58,12 @@ unsigned char ParseLong(unsigned long *number, const unsigned char *ch, const un
   }
  }
  return 1;
+}
+
+unsigned char CharsCmp(const unsigned char *ch1, const unsigned short length1, const unsigned char *ch2, const unsigned short length2){
+ if(length1 != length2){
+  return 0;
+ }
+ return memcmp(ch1, ch2, length1) == 0;
 }
 #endif
