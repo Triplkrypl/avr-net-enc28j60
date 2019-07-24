@@ -60,6 +60,8 @@
 //
 //********************************************************************************************
 
+// todo vytresit asynchroni prijem dat pri castecne uzavrenem spojeni
+
 extern unsigned short connectPortRotaiting;
 static TcpConnection connections[TCP_MAX_CONNECTIONS];
 
@@ -82,8 +84,8 @@ void TcpInit(){
 // Description : claculate tcp received header length
 //
 //*****************************************************************************************
-static inline unsigned char TcpGetHeaderLength(const unsigned char *rxtx_buffer){
- return ((rxtx_buffer[ TCP_HEADER_LEN_P ]>>4) * 4); // generate len in bytes;
+static inline unsigned char TcpGetHeaderLength(const unsigned char *buffer){
+ return ((buffer[ TCP_HEADER_LEN_P ]>>4) * 4); // generate len in bytes;
 }
 
 //*****************************************************************************************
@@ -102,7 +104,7 @@ static inline unsigned short TcpGetDataPosition(const unsigned char *buffer){
 // Description : claculate tcp received data length
 //
 //*****************************************************************************************
-unsigned short TcpGetDataLength(unsigned char *rxtx_buffer){
+unsigned short TcpGetDataLength(const unsigned char *rxtx_buffer){
 	int dlength, hlength;
 
 	dlength = ( rxtx_buffer[ IP_TOTLEN_H_P ] <<8 ) | ( rxtx_buffer[ IP_TOTLEN_L_P ] );
@@ -149,40 +151,50 @@ static inline void TcpSetPort(unsigned char *buffer, const unsigned short destin
 
 //********************************************************************************************
 //
+// Function : TcpChecksum
+// Description : calculate checksum for tcp datagram
+//
+//********************************************************************************************
+static inline unsigned short TcpChecksum(const unsigned char *buffer){
+ return software_checksum(buffer + IP_SRC_IP_P, TcpGetHeaderLength(buffer) + TcpGetDataLength(buffer) + 8, IP_PROTO_TCP_V + TcpGetHeaderLength(buffer) + TcpGetDataLength(buffer));
+}
+
+//********************************************************************************************
+//
 // Function : TcpSendPacket
 // Description : send tcp packet to network.
 //
 //********************************************************************************************
-static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connection, const unsigned char flags, unsigned short dlength){
- eth_generate_header(rxtx_buffer, ETH_TYPE_IP_V, connection.mac);
+static void TcpSendPacket(unsigned char *buffer, const TcpConnection *connection, const unsigned char flags, unsigned short dlength){
+ eth_generate_header(buffer, ETH_TYPE_IP_V, connection->mac);
  if(flags & TCP_FLAG_SYN_V){
   // setup maximum segment size
-  rxtx_buffer[ TCP_OPTIONS_P + 0 ] = 2;
-  rxtx_buffer[ TCP_OPTIONS_P + 1 ] = 4;
+  buffer[ TCP_OPTIONS_P + 0 ] = 2;
+  buffer[ TCP_OPTIONS_P + 1 ] = 4;
   // size of receive buffer - tcp header, ip header and eth header size
-  rxtx_buffer[ TCP_OPTIONS_P + 2 ] = High(TCP_MAX_SEGMENT_SIZE);
-  rxtx_buffer[ TCP_OPTIONS_P + 3 ] = Low(TCP_MAX_SEGMENT_SIZE);
+  buffer[ TCP_OPTIONS_P + 2 ] = High(TCP_MAX_SEGMENT_SIZE);
+  buffer[ TCP_OPTIONS_P + 3 ] = Low(TCP_MAX_SEGMENT_SIZE);
   // setup tcp header length 24 bytes: 6*32/8 = 24
-  rxtx_buffer[ TCP_HEADER_LEN_P ] = 0x60;
+  buffer[ TCP_HEADER_LEN_P ] = 0x60;
   dlength += 4;
  }else{
   // no options: 20 bytes: 5*32/8 = 20
-  rxtx_buffer[TCP_HEADER_LEN_P] = 0x50;
+  buffer[TCP_HEADER_LEN_P] = 0x50;
  }
- ip_generate_header(rxtx_buffer, IP_HEADER_LEN + TCP_HEADER_LEN + dlength, IP_PROTO_TCP_V, connection.ip);
- TcpSetSequence(rxtx_buffer, connection.sendSequence, connection.expectedSequence);
- TcpSetPort(rxtx_buffer, connection.remotePort, connection.port);
+ ip_generate_header(buffer, IP_HEADER_LEN + TCP_HEADER_LEN + dlength, IP_PROTO_TCP_V, connection->ip);
+ TcpSetSequence(buffer, connection->sendSequence, connection->expectedSequence);
+ TcpSetPort(buffer, connection->remotePort, connection->port);
  // setup tcp flags
- rxtx_buffer[TCP_FLAGS_P] = flags;
+ buffer[TCP_FLAGS_P] = flags;
  // setup maximum windows size
- rxtx_buffer[TCP_WINDOWSIZE_H_P] = High(MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN);
- rxtx_buffer[TCP_WINDOWSIZE_L_P] = Low(MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN);
+ buffer[TCP_WINDOWSIZE_H_P] = High(MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN);
+ buffer[TCP_WINDOWSIZE_L_P] = Low(MAX_RX_BUFFER - ETH_HEADER_LEN - IP_HEADER_LEN);
  // setup urgend pointer (not used -> 0)
- rxtx_buffer[TCP_URGENT_PTR_H_P] = 0;
- rxtx_buffer[TCP_URGENT_PTR_L_P] = 0;
+ buffer[TCP_URGENT_PTR_H_P] = 0;
+ buffer[TCP_URGENT_PTR_L_P] = 0;
  // clear old checksum and calculate new checksum
- rxtx_buffer[TCP_CHECKSUM_H_P] = 0;
- rxtx_buffer[TCP_CHECKSUM_L_P] = 0;
+ buffer[TCP_CHECKSUM_H_P] = 0;
+ buffer[TCP_CHECKSUM_L_P] = 0;
  // This is computed as the 16-bit one's complement of the one's complement
  // sum of a pseudo header of information from the
  // IP header, the TCP header, and the data, padded
@@ -198,9 +210,24 @@ static void TcpSendPacket(unsigned char *rxtx_buffer, const TcpConnection connec
  // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
  // +           0           +      IP Protocol      +                    Total length               +
  // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
- CharsPutShort(rxtx_buffer + TCP_CHECKSUM_H_P, software_checksum(rxtx_buffer + IP_SRC_IP_P, TCP_HEADER_LEN + dlength + 8, IP_PROTO_TCP_V + TCP_HEADER_LEN + dlength));
+ CharsPutShort(buffer + TCP_CHECKSUM_H_P, TcpChecksum(buffer));
  // send packet to ethernet media
- enc28j60_packet_send(rxtx_buffer, ETH_HEADER_LEN + IP_HEADER_LEN + TCP_HEADER_LEN + dlength);
+ enc28j60_packet_send(buffer, ETH_HEADER_LEN + IP_HEADER_LEN + TCP_HEADER_LEN + dlength);
+}
+
+//********************************************************************************************
+//
+// Function : TcpVerifyChecksum
+// Description : verify tcp datagram checksum of incoming data
+//
+//********************************************************************************************
+static unsigned char TcpVerifyChecksum(unsigned char *buffer){
+ unsigned short dataSum = CharsToShort(buffer + TCP_CHECKSUM_H_P);
+ buffer[TCP_CHECKSUM_H_P] = 0;
+ buffer[TCP_CHECKSUM_L_P] = 0;
+ unsigned short sum = TcpChecksum(buffer);
+ CharsPutShort(buffer + TCP_CHECKSUM_H_P, dataSum);
+ return dataSum == sum;
 }
 
 //********************************************************************************************
@@ -214,7 +241,7 @@ static unsigned char TcpSendAck(unsigned char *buffer, TcpConnection *connection
  if(expectedData){
   connection->expectedSequence += dataLength;
  }
- TcpSendPacket(buffer, *connection, TCP_FLAG_ACK_V, 0);
+ TcpSendPacket(buffer, connection, TCP_FLAG_ACK_V, 0);
  return expectedData;
 }
 
@@ -265,13 +292,13 @@ const TcpConnection *TcpGetConnection(const unsigned char connectionId){
 // Description : compare if tcp connection and tcp connection parts is same
 //
 //********************************************************************************************
-static inline unsigned char TcpIsConnection(const TcpConnection connection, const unsigned char mac[MAC_ADDRESS_SIZE], const const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsigned short port, const unsigned short remotePort){
+static inline unsigned char TcpIsConnection(const unsigned char *buffer, const TcpConnection *connection, const unsigned short port, const unsigned short remotePort){
  return
-  connection.state != TCP_STATE_NO_CONNECTION &&
-  connection.port == port &&
-  connection.remotePort == remotePort &&
-  memcmp(connection.ip, ip, IP_V4_ADDRESS_SIZE) == 0 &&
-  memcmp(connection.mac, mac, MAC_ADDRESS_SIZE) == 0
+  connection->state != TCP_STATE_NO_CONNECTION &&
+  connection->port == port &&
+  connection->remotePort == remotePort &&
+  memcmp(connection->ip, buffer + IP_SRC_IP_P, IP_V4_ADDRESS_SIZE) == 0 &&
+  memcmp(connection->mac, buffer + ETH_SRC_MAC_P, MAC_ADDRESS_SIZE) == 0
  ;
 }
 
@@ -301,7 +328,7 @@ static unsigned char TcpGetConnectionId(const unsigned char *buffer){
  unsigned short port = CharsToShort(buffer + TCP_DST_PORT_P), remotePort = CharsToShort(buffer + TCP_SRC_PORT_P);
  unsigned char i;
  for(i=0;i<TCP_MAX_CONNECTIONS; i++){
-  if(TcpIsConnection(connections[i], buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, port, remotePort)){
+  if(TcpIsConnection(buffer, connections + i, port, remotePort)){
    return i;
   }
  }
@@ -334,10 +361,13 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
  unsigned short length = EthWaitPacket(buffer, ETH_TYPE_IP_V, 0);
  if(length != 0){
   if(ip_packet_is_ip(buffer) && buffer[IP_PROTO_P] == IP_PROTO_TCP_V){
+   if(!TcpVerifyChecksum(buffer)){
+    return 0;
+   }
    unsigned long seq = CharsToLong(buffer + TCP_SEQ_P);
    unsigned long ack = CharsToLong(buffer + TCP_SEQACK_P);
    if(
-    TcpIsConnection(*connection, buffer + ETH_SRC_MAC_P, buffer + IP_SRC_IP_P, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P)) &&
+    TcpIsConnection(buffer, connection, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P)) &&
     (buffer[ TCP_FLAGS_P ] & expectedFlag) &&
     ((connection->expectedSequence == seq) || (expectedFlag & TCP_FLAG_SYN_V)) &&
     (connection->sendSequence + sendedDataLength) == ack
@@ -357,6 +387,28 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
   }
  }
  return 0;
+}
+
+//********************************************************************************************
+//
+// Function : TcpClose
+// Description : send fin packet and wait for him ack packet
+//
+//********************************************************************************************
+static void TcpClose(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout){
+ unsigned short waiting = 0;
+ for(;;){
+  if(waiting % 300 == 0){
+   TcpSendPacket(buffer, connection, TCP_FLAG_FIN_V | TCP_FLAG_ACK_V, 0);
+  }
+  if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_ACK_V)){
+   return;
+  }
+  waiting++;
+  if(waiting > timeout){
+   break;
+  }
+ }
 }
 
 //********************************************************************************************
@@ -386,7 +438,7 @@ unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsig
  unsigned short waiting = 0;
  for(;;){
   if(waiting % 300 == 0){
-   TcpSendPacket(buffer, *connection, TCP_FLAG_SYN_V, 0);
+   TcpSendPacket(buffer, connection, TCP_FLAG_SYN_V, 0);
   }
   if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_SYN_V | TCP_FLAG_ACK_V)){
    unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
@@ -433,7 +485,7 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
   for(;;){
    if(waiting % 200 == 0 || firstTry){
     memcpy(buffer + TCP_DATA_P, data + offset, partLength);
-    TcpSendPacket(buffer, *connection, TCP_FLAG_ACK_V, partLength);
+    TcpSendPacket(buffer, connection, TCP_FLAG_ACK_V, partLength);
     firstTry = 0;
    }
    if(TcpWaitPacket(buffer, connection, partLength, TCP_FLAG_ACK_V)){
@@ -483,28 +535,6 @@ unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned sh
 
 //********************************************************************************************
 //
-// Function : TcpClose
-// Description : send fin packet and wait for him ack packet
-//
-//********************************************************************************************
-static void TcpClose(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout){
- unsigned short waiting = 0;
- for(;;){
-  if(waiting % 300 == 0){
-   TcpSendPacket(buffer, *connection, TCP_FLAG_FIN_V | TCP_FLAG_ACK_V, 0);
-  }
-  if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_ACK_V)){
-   return;
-  }
-  waiting++;
-  if(waiting > timeout){
-   break;
-  }
- }
-}
-
-//********************************************************************************************
-//
 // Function : TcpDisconnect
 // Description : close active connection client or server side (send fin packet and synchronous waiting for all packet with timeout)
 //
@@ -530,6 +560,9 @@ unsigned char TcpDisconnect(const unsigned char connectionId, unsigned short tim
 //
 //********************************************************************************************
 void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
+ if(!TcpVerifyChecksum(buffer)){
+  return;
+ }
  unsigned char connectionId = TcpGetConnectionId(buffer);
  if(connectionId == TCP_INVALID_CONNECTION_ID){
   return;
@@ -549,7 +582,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
    }
   }
   connections[connectionId].state = TCP_STATE_SYN_RECEIVED;
-  TcpSendPacket(buffer, connections[connectionId], TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
+  TcpSendPacket(buffer, connections + connectionId, TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
   return;
  }
  if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && connections[connectionId].state == TCP_STATE_SYN_RECEIVED){

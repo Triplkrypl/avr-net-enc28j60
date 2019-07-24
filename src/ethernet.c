@@ -89,7 +89,7 @@ void eth_generate_header(unsigned char *buffer, const unsigned short type, const
 // The RFC has also a C code example: http://www.faqs.org/rfcs/rfc1071.html
 //
 //********************************************************************************************
-unsigned short software_checksum(unsigned char *rxtx_buffer, unsigned short len, unsigned long sum){
+unsigned short software_checksum(const unsigned char *rxtx_buffer, unsigned short len, unsigned long sum){
 	// build the sum of 16bit words
 	while(len>1)
 	{

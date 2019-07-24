@@ -45,7 +45,7 @@
 // Prototype function
 //
 //********************************************************************************************
-unsigned short software_checksum(unsigned char *rxtx_buffer, unsigned short len, unsigned long sum);
+unsigned short software_checksum(const unsigned char *rxtx_buffer, unsigned short len, unsigned long sum);
 void eth_generate_header(unsigned char *buffer, const unsigned short type, const unsigned char destMac[MAC_ADDRESS_SIZE]);
 unsigned char EthCheckType(const unsigned char *rxtx_buffer, const unsigned short type);
 unsigned short EthWaitPacket(unsigned char *rxtx_buffer, unsigned short type, unsigned short timeout);

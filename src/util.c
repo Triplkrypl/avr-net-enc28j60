@@ -3,11 +3,11 @@
 
 #include <string.h>
 
-inline unsigned char Low(unsigned short value){
+inline unsigned char Low(const unsigned short value){
  return (value&0xFF);
 }
 
-inline unsigned char High(unsigned short value){
+inline unsigned char High(const unsigned short value){
  return ((value>>8)&0xFF);
 }
 
