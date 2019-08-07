@@ -60,8 +60,6 @@
 //
 //********************************************************************************************
 
-// todo vytresit asynchroni prijem dat pri castecne uzavrenem spojeni
-
 extern unsigned short connectPortRotaiting;
 static TcpConnection connections[TCP_MAX_CONNECTIONS];
 
