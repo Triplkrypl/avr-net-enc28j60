@@ -59,12 +59,12 @@ If someone will recognize code with is not mine and will know repository i will 
 // this define maximum size of incoming packet,
 // define maximum size of sended packet,
 // and define tcp max segment size
-// bigger value allow send an receive bigger packet (UDP datagram) and better performance for TCP
-// lower value save RAM space, you can create bigger buffer than AVR RAM or to big than no space for application :-)
+// bigger value allow send and receive bigger packet (UDP datagram) and better performance for TCP
+// lower value save RAM, you can create bigger buffer than AVR RAM or to big than no space for application :-)
 // minimum recommended value is 600 bytes, in IPV4 standard minimum IP datagram size is 576 bytes
 // you can use smaller buffer, if you sure than you do not receive bigger packets
 #define NET_BUFFER_SIZE 600
-// define size of arp cache array
+// define size of arp cache array, default value 5
 // arp requests for ip are cached in RAM
 // defined zero size turn off cache and code for cache is not included in compilation
 // bigger value allow save more ip in cache is good if your AVR communicate with more hosts

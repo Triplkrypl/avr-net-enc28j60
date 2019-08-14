@@ -1,11 +1,19 @@
 #ifndef HTTP
 #define HTTP
 
-#include "tcp.c"
 #include <stdio.h>
 #include <string.h>
 
-// todo pretizeni tcp callbacku pro koexistovani http listeneru a moznots imlementovat jine protokoli soucasne
+#define TCP_ON_NEW_CONNETION_CALLBACK HttpTcpOnNewConnection
+#define TCP_ON_CONNECT_CALLBACK HttpTcpOnConnect
+#define TCP_ON_INCOMING_DATA_CALLBACK HttpTcpOnIncomingData
+#define TCP_ON_DISCONNECT_CALLBACK HttpTcpOnDisconnect
+
+#include "tcp.c"
+
+#ifndef HTTP_TCP_INCLUDED
+#define HTTP_TCP_INCLUDED 0
+#endif
 
 #define HTTP_MAX_METHOD_LENGTH 10
 #define HTTP_MAX_VERSION_LENGTH 10
@@ -53,6 +61,12 @@ typedef struct{
  unsigned char *value;
 } HttpHeaderValue;
 
+#if HTTP_TCP_INCLUDED == 1
+unsigned char TcpOnNewConnection(const unsigned char connectionId);
+void TcpOnConnect(const unsigned char connectionId);
+void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength);
+void TcpOnDisconnect(const unsigned char connectionId);
+#endif
 void HttpOnIncomingRequest(const HttpRequest *request);
 
 const static HttpStatus statuses[] = {
@@ -344,44 +358,55 @@ unsigned char HttpSendResponse(const HttpStatus *status, unsigned char *headers,
 
 //*****************************************************************************************
 //
-// Function : TcpOnNewConnection
+// Function : HttpTcpOnNewConnection
 // Description : defined tcp callback for accept new incoming connection on http port
 //
 //*****************************************************************************************
-unsigned char TcpOnNewConnection(const unsigned char connectionId){
- if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT){
-  if(incomingRequestState != HTTP_REQUEST_STATE_NO_REQUEST){
-   return NET_HANDLE_RESULT_DROP;
-  }
-  incomingRequestConnectionId = connectionId;
-  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
-  incomingRequestPosition = 0;
-  incomingRequest.connection = TcpGetConnection(connectionId);
-  return NET_HANDLE_RESULT_OK;
+unsigned char HttpTcpOnNewConnection(const unsigned char connectionId){
+ const TcpConnection *connection = TcpGetConnection(connectionId);
+ if(connection->port != HTTP_SERVER_PORT){
+  #if HTTP_TCP_INCLUDED == 1
+  return TcpOnNewConnection(connectionId);
+  #else
+  return NET_HANDLE_RESULT_DROP;
+  #endif
  }
- return NET_HANDLE_RESULT_DROP;
+ if(incomingRequestState != HTTP_REQUEST_STATE_NO_REQUEST){
+  return NET_HANDLE_RESULT_DROP;
+ }
+ incomingRequestConnectionId = connectionId;
+ incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
+ incomingRequestPosition = 0;
+ incomingRequest.connection = connection;
+ return NET_HANDLE_RESULT_OK;
 }
 
 //*****************************************************************************************
 //
-// Function : TcpOnConnect
+// Function : HttpTcpOnConnect
 // Description : defined tcp callback for detect new connection not used in http
 //
 //*****************************************************************************************
-void TcpOnConnect(const unsigned char connectionId){
+void HttpTcpOnConnect(const unsigned char connectionId){
+ #if HTTP_TCP_INCLUDED == 1
  if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT){
   return;
  }
+ TcpOnConnect(connectionId);
+ #endif
 }
 
 //*****************************************************************************************
 //
-// Function : TcpOnIncomingData
+// Function : HttpTcpOnIncomingData
 // Description : handle incoming http request by tcp callback
 //
 //*****************************************************************************************
-void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength){
+void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength){
  if(TcpGetConnection(connectionId)->port != HTTP_SERVER_PORT){
+  #if HTTP_TCP_INCLUDED == 1
+  TcpOnIncomingData(connectionId, data, dataLength);
+  #endif
   return;
  }
  if(incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST || connectionId != incomingRequestConnectionId){
@@ -452,18 +477,22 @@ void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *da
 
 //*****************************************************************************************
 //
-// Function : TcpOnDisconnect
+// Function : HttpTcpOnDisconnect
 // Description : after handling request reset memory and be ready for another http request
 //
 //*****************************************************************************************
-void TcpOnDisconnect(const unsigned char connectionId){
- if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT){
-  if(connectionId != incomingRequestConnectionId || incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST){
-   return;
-  }
-  incomingRequestConnectionId = TCP_INVALID_CONNECTION_ID;
-  incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;
+void HttpTcpOnDisconnect(const unsigned char connectionId){
+ if(TcpGetConnection(connectionId)->port != HTTP_SERVER_PORT){
+  #if HTTP_TCP_INCLUDED == 1
+  TcpOnDisconnect(connectionId);
+  #endif
   return;
  }
+ if(connectionId != incomingRequestConnectionId || incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST){
+  return;
+ }
+ incomingRequestConnectionId = TCP_INVALID_CONNECTION_ID;
+ incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;
+ return;
 }
 #endif

@@ -71,6 +71,19 @@
 #define TCP_OPTIONS_P 		0x36
 #define TCP_DATA_P			0x36
 
+#ifndef TCP_ON_NEW_CONNETION_CALLBACK
+#define TCP_ON_NEW_CONNETION_CALLBACK TcpOnNewConnection
+#endif
+#ifndef TCP_ON_CONNECT_CALLBACK
+#define TCP_ON_CONNECT_CALLBACK TcpOnConnect
+#endif
+#ifndef TCP_ON_INCOMING_DATA_CALLBACK
+#define TCP_ON_INCOMING_DATA_CALLBACK TcpOnIncomingData
+#endif
+#ifndef TCP_ON_DISCONNECT_CALLBACK
+#define TCP_ON_DISCONNECT_CALLBACK TcpOnDisconnect
+#endif
+
 typedef struct{
  unsigned long sendSequence;
  unsigned long expectedSequence;
@@ -94,8 +107,8 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
 unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 unsigned char TcpDisconnect(const unsigned char connectionId, unsigned short timeout);
 void TcpHandleIncomingPacket(unsigned char *buffer, const unsigned short length);
-unsigned char TcpOnNewConnection(const unsigned char connectionId);
-void TcpOnConnect(const unsigned char connectionId);
-void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength);
-void TcpOnDisconnect(const unsigned char connectionId);
+unsigned char TCP_ON_NEW_CONNETION_CALLBACK(const unsigned char connectionId);
+void TCP_ON_CONNECT_CALLBACK(const unsigned char connectionId);
+void TCP_ON_INCOMING_DATA_CALLBACK(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength);
+void TCP_ON_DISCONNECT_CALLBACK(const unsigned char connectionId);
 #endif

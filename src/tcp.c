@@ -443,7 +443,7 @@ unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsig
    connection->maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
    TcpSendAck(buffer, connection, connection->expectedSequence, 1);
    connection->state = TCP_STATE_ESTABLISHED;
-   TcpOnConnect(connectionId);
+   TCP_ON_CONNECT_CALLBACK(connectionId);
    return connectionId;
   }
   waiting++;
@@ -546,7 +546,7 @@ unsigned char TcpDisconnect(const unsigned char connectionId, unsigned short tim
  }
  connections[connectionId].state = TCP_STATE_DYEING;
  unsigned char *buffer = NetGetBuffer();
- TcpOnDisconnect(connectionId);
+ TCP_ON_DISCONNECT_CALLBACK(connectionId);
  TcpClose(buffer, connections + connectionId, timeout);
  return 1;
 }
@@ -568,7 +568,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
  // handle new connection
  if((buffer[TCP_FLAGS_P] == TCP_FLAG_SYN_V) && (connections[connectionId].state == TCP_STATE_NEW || connections[connectionId].state == TCP_STATE_SYN_RECEIVED)){
   if(connections[connectionId].state == TCP_STATE_NEW){
-   unsigned char result = TcpOnNewConnection(connectionId);
+   unsigned char result = TCP_ON_NEW_CONNETION_CALLBACK(connectionId);
    if(result == NET_HANDLE_RESULT_DROP){
     connections[connectionId].state = TCP_STATE_NO_CONNECTION;
     return;
@@ -586,7 +586,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
  if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && connections[connectionId].state == TCP_STATE_SYN_RECEIVED){
   connections[connectionId].state = TCP_STATE_ESTABLISHED;
   connections[connectionId].sendSequence = CharsToLong(buffer + TCP_SEQACK_P);
-  TcpOnConnect(connectionId);
+  TCP_ON_CONNECT_CALLBACK(connectionId);
  }
  // handle connection close
  if((buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && (connections[connectionId].state == TCP_STATE_ESTABLISHED || connections[connectionId].state == TCP_STATE_DYEING)){
@@ -595,7 +595,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
   }
   if(connections[connectionId].state == TCP_STATE_ESTABLISHED){
    connections[connectionId].state = TCP_STATE_DYEING;
-   TcpOnDisconnect(connectionId);
+   TCP_ON_DISCONNECT_CALLBACK(connectionId);
    TcpClose(buffer, connections + connectionId, 1000);
   }
   connections[connectionId].state = TCP_STATE_NO_CONNECTION;
@@ -611,6 +611,6 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
  if(!TcpSendAck(buffer, connections + connectionId, CharsToLong(buffer + TCP_SEQ_P), length)){
   return;
  }
- TcpOnIncomingData(connectionId, buffer + TcpGetDataPosition(buffer), length);
+ TCP_ON_INCOMING_DATA_CALLBACK(connectionId, buffer + TcpGetDataPosition(buffer), length);
  return;
 }
