@@ -70,11 +70,30 @@ If someone will recognize code with is not mine and will know repository i will 
 // bigger value allow save more ip in cache is good if your AVR communicate with more hosts
 // lower value is good for more dynamic network in smaller cache will often rewrite unused ip in cache
 #define NET_ARP_CACHE_SIZE 5
+// define for tcp.c include
 // define how many tcp connection can live in AVR (server/client connections)
 // if number connections is equal as limit all new incoming TCP connections is dropped
 // bigger value allow more connected hosts at one time
 // lower value is RAM free
 #define TCP_MAX_CONNECTIONS 2
+// define for http.c include
+// define which tcp port is used for http listener
+#define HTTP_SERVER_PORT 80
+// definition of maximum request parts length, whole received request can be bigger than
+// NET_BUFFER_SIZE because request can be received in multiple tcp packet but be ware out of memory
+// define maximum request url length in bytes without host, example "/some/url?somequery"
+#define HTTP_MAX_URL_LENGTH 50
+// define maximum request headers length without first request header line where is method...
+#define HTTP_MAX_HEADER_ROWS_LENGTH 50
+// define maximum request body length
+#define HTTP_MAX_DATA_LENGTH 50
+// turn on/off callback from tcp.c, if http.c is included
+// http.c define all callbacks from tcp.c so can not be used without define HTTP_TCP_INCLUDED as 1
+// if tcp callbacks is turn on have to be defined in application as if tcp.c is included
+// if you want use only http protocol you do not need this define and use default value 0
+// if you want implement other protocol which used tcp and use http to, turn tcp callback on
+// all tcp callback is not call on packet related to http protocol, this packets is handled inside http.c
+#define HTTP_TCP_INCLUDED 0
 
 // you have to define your cpu frequency because of delay.h library
 #define F_CPU 16000000UL
@@ -82,10 +101,15 @@ If someone will recognize code with is not mine and will know repository i will 
 // include icmp.c if you want your AVR to response PING
 #include "src/icmp.c"
 // include udp.c if you want handle incoming UDP datagram or send them
-#include "src/udp.c"
+//#include "src/udp.c"
 // include tcp.c if you want handle incoming TCP connection or connect somewhere
-#include "src/tcp.c"
-// include one of icmp.c or udp.c or tcp.c otherwise AVR will only response on ARP and it is little useless :-)
+//#include "src/tcp.c"
+// include http.c if you want handle incoming HTTP requests
+//#include "src/http.c"
+// include one of icmp.c or udp.c or tcp.c or http.c,
+// otherwise AVR will only response on ARP and it is little useless :-)
+// not include tcp.c and http.c both if you want use both correctly,
+// include http.c and before define HTTP_TCP_INCLUDED as 1
 // you have to include network.c (main include for library)
 #include "src/network.c"
 
@@ -102,6 +126,7 @@ int main(){
 ### Callback functions
 
 If you include tcp.c, you have to define functions callback TcpOnNewConnection, TcpOnConnect, TcpOnIncomingData, TcpOnDisconnect
+You also have to define this callbacks if you include http.c and define HTTP_TCP_INCLUDED as 1
 
 ```c
 // function called if new tcp client is connecting into AVR, it is like firewall,
@@ -156,17 +181,28 @@ If you include udp.c, you have to define function callback UdpOnIncomingDatagram
 ```c
 // function called any time if any UPD datagram income into AVR except UDP datagram cathed by synchronous wait
 // you have to return:
-// NET_HANDLE_RESULT_DROP inform library that your application code nothing do with datagram, nothing happened after
-// NET_HANDLE_RESULT_OK inform library that your application code do somethink with datagram, nothing happened after
+// NET_HANDLE_RESULT_DROP inform library that your application code nothing do with datagram
+// NET_HANDLE_RESULT_OK inform library that your application code do somethink with datagram
 // NET_HANDLE_RESULT_REJECT inform library that your application code nothing do with datagram
 // after that library send unreachable icmp packet
-unsigned char UdpOnIncomingDatagram(UdpDatagram datagram, const unsigned char *data, unsigned short dataLength){
- if(datagram->port == 5000){
+unsigned char UdpOnIncomingDatagram(const UdpDatagram datagram, const unsigned char *data, unsigned short dataLength){
+ if(datagram.port == 5000){
   // do something
   return NET_HANDLE_RESULT_OK;
  }
  return NET_HANDLE_RESULT_DROP;
 }
+```
+
+If you include http.c, you have to define function callback HttpOnIncomingRequest
+```c
+// function called any time if http request if fully parsed and ready to be processed
+// only request incoming with destination HTTP_SERVER_PORT is allow for parsing and passed in this callback
+// response should be send by function HttpSendResponse called inside this callback
+// response is not returned as return value because otherwise is dynamic allocation needed
+// if HttpSendResponse is not called, library return 204 response because nothing is send
+// any 404 and 500 or other applications errors have to be handled in application
+void HttpOnIncomingRequest(const HttpRequest* request);
 ```
 
 ### Functions
@@ -234,3 +270,32 @@ unsigned short UdpSendDataTmpPort(const unsigned char *ip, const unsigned short 
 // catched data by this function is not send into UdpOnIncomingDatagram callback
 unsigned char UdpReceiveData(const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 ```
+
+Functions from http.c HttpParseHeaderValue, HttpSendResponse
+
+```c
+// function parse value from http header rows, first parameter is request as source of headers
+// second parameter is header row key name for look up
+// if header key name are more than once in request first one value is returned
+// if header key name is not found in request, structure with zero length and zero pointer value is returned
+// example: HttpParseHeaderValue(request, "Host"); with request headers:
+// Host: somewhere.org
+// SomeHeader: aaaaaaa
+//
+// will return structure with 13 length and "somewhere.org" value pointing into request structure without ending zero char
+const HttpHeaderValue HttpParseHeaderValue(const HttpRequest *request, const unsigned char *header);
+
+// function send http response into network while is some request processed in callback HttpOnIncomingRequest
+// function return 1 on success 0 on any error
+// can be called only once per callback call and only if request is processed, in other http listener internal state return 0 as error
+// if HttpStatus.message is 0 pointer default status message is filed by library
+// headers parameter is all additional response header rows example:
+// ContentType: json
+// Language: en
+//
+// all header row have to end with \n character
+// headersLength parameter is length of headers parameter in bytes, if zero length is set no additional headers are send and headers parameter is ignored
+// data parameter is data send in response body if dataLength is zero no body is send and data parameter is ignored
+unsigned char HttpSendResponse(const HttpStatus *status, unsigned char *headers, unsigned short headersLength, unsigned char *data, unsigned short dataLength);
+```
+
