@@ -366,7 +366,7 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
    unsigned long ack = CharsToLong(buffer + TCP_SEQACK_P);
    if(
     TcpIsConnection(buffer, connection, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P)) &&
-    (buffer[ TCP_FLAGS_P ] & expectedFlag) &&
+    (!((~buffer[ TCP_FLAGS_P ]) & expectedFlag)) &&
     ((connection->expectedSequence == seq) || (expectedFlag & TCP_FLAG_SYN_V)) &&
     (connection->sendSequence + sendedDataLength) == ack
    ){
@@ -511,12 +511,12 @@ unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned sh
   return 0;
  }
  TcpConnection *connection = connections + connectionId;
- if(connection->state != TCP_STATE_ESTABLISHED){
-  return 0;
- }
  unsigned short waiting = 0;
  unsigned char *buffer = NetGetBuffer();
  for(;;){
+  if(connection->state != TCP_STATE_ESTABLISHED){
+   return 0;
+  }
   if(TcpWaitPacket(buffer, connection, 0, TCP_FLAG_ACK_V)){
    *data = buffer + TcpGetDataPosition(buffer);
    *dataLength = TcpGetDataLength(buffer);
