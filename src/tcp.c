@@ -374,7 +374,7 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
      connection->expectedSequence = seq;
     }
     connection->sendSequence = ack;
-    if(TcpGetDataLength(buffer) != 0 && sendedDataLength != 0) {
+    if((TcpGetDataLength(buffer) != 0 || buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && sendedDataLength != 0) {
      TcpHandleIncomingPacket(buffer, length);
     }
     return 1;
@@ -469,9 +469,6 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
   return 0;
  }
  TcpConnection *connection = connections + connectionId;
- if(connection->state != TCP_STATE_ESTABLISHED){
-  return 0;
- }
  unsigned short waiting = 0, offset = 0, partLength;
  unsigned char firstTry, *buffer = NetGetBuffer();
  do{
@@ -481,6 +478,9 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
    partLength = dataLength - offset;
   }
   for(;;){
+   if(connection->state != TCP_STATE_ESTABLISHED){
+    return 0;
+   }
    if(waiting % 200 == 0 || firstTry){
     memcpy(buffer + TCP_DATA_P, data + offset, partLength);
     TcpSendPacket(buffer, connection, TCP_FLAG_ACK_V, partLength);
