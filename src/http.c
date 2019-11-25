@@ -154,18 +154,18 @@ static unsigned char HttpHeadersPutChar(unsigned char ch){
 // Description : function take char from incoming data and decide where put them in request structure on fail send error response header
 //
 //*****************************************************************************************
-static unsigned char HttpParseHeader(unsigned char ch){
- if(incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST){
+static unsigned char HttpParseHeader(unsigned char ch, unsigned char *headerState){
+ if(*headerState == HTTP_REQUEST_STATE_NO_REQUEST){
   return 0;
  }
- if(incomingRequestState == HTTP_REQUEST_STATE_START_REQUEST){
-  incomingRequestState = HTTP_REQUEST_STATE_METHOD;
+ if(*headerState == HTTP_REQUEST_STATE_START_REQUEST){
+  *headerState = HTTP_REQUEST_STATE_METHOD;
   incomingPosition = 0;
  }
  // parse http method
- if(incomingRequestState == HTTP_REQUEST_STATE_METHOD){
+ if(*headerState == HTTP_REQUEST_STATE_METHOD){
   if(ch == ' '){
-   incomingRequestState = HTTP_REQUEST_STATE_URL;
+   *headerState = HTTP_REQUEST_STATE_URL;
    incomingRequest.method[incomingPosition] = 0;
    incomingRequest.urlLength = 0;
    return 1;
@@ -185,9 +185,9 @@ static unsigned char HttpParseHeader(unsigned char ch){
   return 1;
  }
  // parse url
- if(incomingRequestState == HTTP_REQUEST_STATE_URL){
+ if(*headerState == HTTP_REQUEST_STATE_URL){
   if(ch == ' '){
-   incomingRequestState = HTTP_REQUEST_STATE_VERSION;
+   *headerState = HTTP_REQUEST_STATE_VERSION;
    incomingPosition = 0;
    return 1;
   }
@@ -200,16 +200,16 @@ static unsigned char HttpParseHeader(unsigned char ch){
   return 1;
  }
  // parse http version
- if(incomingRequestState == HTTP_REQUEST_STATE_VERSION){
+ if(*headerState == HTTP_REQUEST_STATE_VERSION){
   if(ch == '\r' || ch == '\n'){
    incomingRequest.version[incomingPosition] = 0;
    incomingRequest.headersLenght = 0;
    if(ch == '\r'){
-    incomingRequestState = HTTP_STATE_MAC_END_HEADER;
+    *headerState = HTTP_STATE_MAC_END_HEADER;
     return 1;
    }
    if(ch == '\n'){
-    incomingRequestState = HTTP_STATE_LINUX_END_HEADER;
+    *headerState = HTTP_STATE_LINUX_END_HEADER;
     return 1;
    }
   }
@@ -223,64 +223,58 @@ static unsigned char HttpParseHeader(unsigned char ch){
   return 1;
  }
  // parse headers end
- if(incomingRequestState == HTTP_STATE_MAC_END_HEADER){
+ if(*headerState == HTTP_STATE_MAC_END_HEADER){
   if(ch == '\n'){
-   incomingRequestState = HTTP_STATE_WIN_END_HEADER;
+   *headerState = HTTP_STATE_WIN_END_HEADER;
    return 1;
   }
   if(ch == '\r'){
-   incomingRequestState = HTTP_STATE_END_HEADER;
-   if(!HttpHeadersPutChar('\n')){
-    return 0;
-   }
+   *headerState = HTTP_STATE_END_HEADER;
    incomingRequest.dataLength = 0;
    incomingRequest.headers[incomingRequest.headersLenght] = 0;
    return 1;
   }
-  incomingRequestState = HTTP_STATE_HEADER;
+  *headerState = HTTP_STATE_HEADER;
   if(!HttpHeadersPutChar(ch)){
    return 0;
   }
   return 1;
  }
- if(incomingRequestState == HTTP_STATE_LINUX_END_HEADER || incomingRequestState == HTTP_STATE_WIN_END_HEADER2){
+ if(*headerState == HTTP_STATE_LINUX_END_HEADER || *headerState == HTTP_STATE_WIN_END_HEADER2){
   if(ch == '\n'){
-   incomingRequestState = HTTP_STATE_END_HEADER;
-   if(!HttpHeadersPutChar('\n')){
-    return 0;
-   }
+   *headerState = HTTP_STATE_END_HEADER;
    incomingRequest.dataLength = 0;
    incomingRequest.headers[incomingRequest.headersLenght] = 0;
    return 1;
   }
-  incomingRequestState = HTTP_STATE_HEADER;
+  *headerState = HTTP_STATE_HEADER;
   if(!HttpHeadersPutChar(ch)){
    return 0;
   }
   return 1;
  }
- if(incomingRequestState == HTTP_STATE_WIN_END_HEADER){
+ if(*headerState == HTTP_STATE_WIN_END_HEADER){
   if(ch == '\r'){
-   incomingRequestState = HTTP_STATE_WIN_END_HEADER2;
+   *headerState = HTTP_STATE_WIN_END_HEADER2;
    return 1;
   }
-  incomingRequestState = HTTP_STATE_HEADER;
+  *headerState = HTTP_STATE_HEADER;
   if(!HttpHeadersPutChar(ch)){
    return 0;
   }
   return 1;
  }
  // parse header rows
- if(incomingRequestState == HTTP_STATE_HEADER){
+ if(*headerState == HTTP_STATE_HEADER){
   if(ch == '\r'){
-   incomingRequestState = HTTP_STATE_MAC_END_HEADER;
+   *headerState = HTTP_STATE_MAC_END_HEADER;
    if(!HttpHeadersPutChar('\n')){
     return 0;
    }
    return 1;
   }
   if(ch == '\n'){
-   incomingRequestState = HTTP_STATE_LINUX_END_HEADER;
+   *headerState = HTTP_STATE_LINUX_END_HEADER;
   }
   if(!HttpHeadersPutChar(ch)){
    return 0;
@@ -419,7 +413,7 @@ void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char
  unsigned short dataPosition = 0;
  if(incomingRequestState < HTTP_STATE_END_HEADER){
   for(dataPosition=0; dataPosition<dataLength; dataPosition++){
-   if(!HttpParseHeader(data[dataPosition])){
+   if(!HttpParseHeader(data[dataPosition], &incomingRequestState)){
     return;
    }
    if(incomingRequestState == HTTP_STATE_END_HEADER){
