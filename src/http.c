@@ -83,7 +83,7 @@ const static HttpStatus statuses[] = {
 static unsigned char incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;
 static HttpRequest incomingRequest;
 static unsigned char incomingRequestConnectionId = TCP_INVALID_CONNECTION_ID;
-static unsigned short incomingRequestPosition;
+static unsigned short incomingPosition;
 
 //*****************************************************************************************
 //
@@ -160,13 +160,13 @@ static unsigned char HttpParseHeader(unsigned char ch){
  }
  if(incomingRequestState == HTTP_REQUEST_STATE_START_REQUEST){
   incomingRequestState = HTTP_REQUEST_STATE_METHOD;
-  incomingRequestPosition = 0;
+  incomingPosition = 0;
  }
  // parse http method
  if(incomingRequestState == HTTP_REQUEST_STATE_METHOD){
   if(ch == ' '){
    incomingRequestState = HTTP_REQUEST_STATE_URL;
-   incomingRequest.method[incomingRequestPosition] = 0;
+   incomingRequest.method[incomingPosition] = 0;
    incomingRequest.urlLength = 0;
    return 1;
   }
@@ -175,20 +175,20 @@ static unsigned char HttpParseHeader(unsigned char ch){
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
-  if(incomingRequestPosition >= HTTP_MAX_METHOD_LENGTH){
+  if(incomingPosition >= HTTP_MAX_METHOD_LENGTH){
    HttpStatus status = {431, "Method Too Long"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
-  incomingRequest.method[incomingRequestPosition] = ch;
-  incomingRequestPosition++;
+  incomingRequest.method[incomingPosition] = ch;
+  incomingPosition++;
   return 1;
  }
  // parse url
  if(incomingRequestState == HTTP_REQUEST_STATE_URL){
   if(ch == ' '){
    incomingRequestState = HTTP_REQUEST_STATE_VERSION;
-   incomingRequestPosition = 0;
+   incomingPosition = 0;
    return 1;
   }
   if(incomingRequest.urlLength >= HTTP_MAX_URL_LENGTH){
@@ -202,7 +202,7 @@ static unsigned char HttpParseHeader(unsigned char ch){
  // parse http version
  if(incomingRequestState == HTTP_REQUEST_STATE_VERSION){
   if(ch == '\r' || ch == '\n'){
-   incomingRequest.version[incomingRequestPosition] = 0;
+   incomingRequest.version[incomingPosition] = 0;
    incomingRequest.headersLenght = 0;
    if(ch == '\r'){
     incomingRequestState = HTTP_STATE_MAC_END_HEADER;
@@ -213,13 +213,13 @@ static unsigned char HttpParseHeader(unsigned char ch){
     return 1;
    }
   }
-  if(incomingRequestPosition >= HTTP_MAX_VERSION_LENGTH){
+  if(incomingPosition >= HTTP_MAX_VERSION_LENGTH){
    HttpStatus status = {431, "Version Too Long"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
-  incomingRequest.version[incomingRequestPosition] = ch;
-  incomingRequestPosition++;
+  incomingRequest.version[incomingPosition] = ch;
+  incomingPosition++;
   return 1;
  }
  // parse headers end
@@ -378,7 +378,7 @@ unsigned char HttpTcpOnNewConnection(const unsigned char connectionId){
  }
  incomingRequestConnectionId = connectionId;
  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
- incomingRequestPosition = 0;
+ incomingPosition = 0;
  incomingRequest.connection = connection;
  return NET_HANDLE_RESULT_OK;
 }
