@@ -193,7 +193,7 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
   }
  }
  unsigned char staticHeaders[51];
- int printResult = snprintf(staticHeaders, 50, "%s %u %s", incomingRequest.version, status->code, status->message ?: "Shit Happens");
+ int printResult = snprintf(staticHeaders, 50, "HTTP/1.0 %u %s", status->code, status->message ?: "Shit Happens");
  if(printResult < 0 || printResult >= 50){
   return 0;
  }
