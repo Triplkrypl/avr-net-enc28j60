@@ -410,7 +410,7 @@ unsigned char HttpTcpOnNewConnection(const unsigned char connectionId){
 //*****************************************************************************************
 void HttpTcpOnConnect(const unsigned char connectionId){
  #if HTTP_TCP_INCLUDED == 1
- if(TcpGetConnection(connectionId)->port == HTTP_SERVER_PORT){
+ if(connectionId == incomingRequestConnectionId){
   return;
  }
  TcpOnConnect(connectionId);
@@ -424,7 +424,7 @@ void HttpTcpOnConnect(const unsigned char connectionId){
 //
 //*****************************************************************************************
 void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength){
- if(TcpGetConnection(connectionId)->port != HTTP_SERVER_PORT){
+ if(connectionId != incomingRequestConnectionId){
   #if HTTP_TCP_INCLUDED == 1
   TcpOnIncomingData(connectionId, data, dataLength);
   #endif
@@ -500,17 +500,16 @@ void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char
 //
 //*****************************************************************************************
 void HttpTcpOnDisconnect(const unsigned char connectionId){
- if(TcpGetConnection(connectionId)->port != HTTP_SERVER_PORT){
+ if(connectionId != incomingRequestConnectionId){
   #if HTTP_TCP_INCLUDED == 1
   TcpOnDisconnect(connectionId);
   #endif
   return;
  }
- if(connectionId != incomingRequestConnectionId || incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST){
+ if(incomingRequestState == HTTP_REQUEST_STATE_NO_REQUEST){
   return;
  }
  incomingRequestConnectionId = TCP_INVALID_CONNECTION_ID;
  incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;
- return;
 }
 #endif
