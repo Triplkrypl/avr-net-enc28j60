@@ -81,9 +81,9 @@ const static HttpStatus statuses[] = {
  {411, "Length Required"},
  {204, "No Content"}
 };
-static unsigned char incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;
+static unsigned char incomingRequestState;
 static HttpRequest incomingRequest;
-static unsigned char incomingRequestConnectionId = TCP_INVALID_CONNECTION_ID;
+static unsigned char incomingRequestConnectionId;
 static unsigned short incomingPosition;
 
 //*****************************************************************************************
@@ -298,6 +298,17 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
  HttpStatus status = {400, "Headers Syntax Error"};
  HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
  return 0;
+}
+
+//*****************************************************************************************
+//
+// Function : HttpInit
+// Description : function set memory into init state
+//
+//*****************************************************************************************
+void HttpInit(){
+ incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;
+ incomingRequestConnectionId = TCP_INVALID_CONNECTION_ID;
 }
 
 //*****************************************************************************************

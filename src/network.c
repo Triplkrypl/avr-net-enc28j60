@@ -19,6 +19,9 @@ void NetInit() {
  #ifdef TCP
  TcpInit();
  #endif
+ #ifdef HTTP
+ HttpInit();
+ #endif
 }
 
 unsigned char *NetGetBuffer(){
