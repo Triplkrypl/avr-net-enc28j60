@@ -291,16 +291,16 @@ unsigned char UdpReceiveData(const unsigned char *ip, const unsigned short remot
 Functions from http.c HttpParseHeaderValue, HttpSendResponse
 
 ```c
-// function parse value from http header rows, first parameter is request as source of headers
+// function parse value from http header rows, first parameter is http message as source of headers
 // second parameter is header row key name for look up
-// if header key name are more than once in request first one value is returned
-// if header key name is not found in request, structure with zero length and zero pointer value is returned
-// example: HttpParseHeaderValue(request, "Host"); with request headers:
+// if header key name are more than once in message first one value is returned
+// if header key name is not found in message, structure with zero length and zero pointer value is returned
+// example: HttpParseHeaderValue(message, "Host"); with http headers:
 // Host: somewhere.org
 // SomeHeader: aaaaaaa
 //
-// will return structure with 13 length and "somewhere.org" value pointing into request structure without ending zero char
-const HttpHeaderValue HttpParseHeaderValue(const HttpRequest *request, const unsigned char *header);
+// will return structure with 13 length and "somewhere.org" value pointing into message structure without ending zero char
+const HttpHeaderValue HttpParseHeaderValue(const HttpMessage *message, const unsigned char *header);
 
 // function send http response into network while is some request processed in callback HttpOnIncomingRequest
 // function return 1 on success 0 on any error
