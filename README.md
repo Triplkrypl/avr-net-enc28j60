@@ -206,9 +206,9 @@ If you include http.c, you have to define function callback HttpOnIncomingReques
 ```c
 // function called any time if http request if fully parsed and ready to be processed
 // only request incoming with destination HTTP_SERVER_PORT is allow for parsing and passed in this callback
-// response should be send by function HttpSendResponse called inside this callback
+// response must be send by function HttpSendResponse called inside this callback
 // response is not returned as return value because otherwise is dynamic allocation needed
-// if HttpSendResponse is not called, library return 204 response because nothing is send
+// if HttpSendResponse is not called, library close tcp connection without send any response after callback ends
 // any 404 and 500 or other applications errors have to be handled in application
 void HttpOnIncomingRequest(const HttpRequest* request){
  if(strcmp(request->method, "GET") == 0 && CharsCmp(request->url, request->urlLength, "/some-url", strlen("/some-url"))){

@@ -39,7 +39,6 @@
 #define HTTP_414_POS 3
 #define HTTP_413_POS 4
 #define HTTP_411_POS 5
-#define HTTP_204_POS 6
 
 typedef struct{
  unsigned short headersLenght;
@@ -494,7 +493,7 @@ void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char
   incomingRequestState = HTTP_REQUEST_STATE_REQUEST_HANDLING;
   HttpOnIncomingRequest(&incomingRequest);
   if(incomingRequestState == HTTP_REQUEST_STATE_REQUEST_HANDLING){
-   HttpSendResponseHeader(connectionId, statuses + HTTP_204_POS, 0, 0, 0);
+   TcpDisconnect(connectionId, 5000);
    return;
   }
   return;
