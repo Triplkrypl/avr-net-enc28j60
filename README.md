@@ -3,16 +3,6 @@
 Library written in C for AVR microcontroller. This code is based on other public repository which i do not remember where it is.
 If someone will recognize code which is not mine and will know repository i will glad add reference here.
 
-## Changes what i made before versioning.
-
-* Fixes:
-    * icmp ping with different length works, before library not response with same icmp length as was request but with constant length
-
-* Improvements:
-    * tcp can handle multiple established connections
-    * synchronous wait for packet if receive different packet than expected will send received packed in to main loop function for handle except drop
-    * arp broadcast responses are cached
-
 ## Versions
 
 Current version **0.1.4**
@@ -20,6 +10,10 @@ Current version **0.1.4**
 ```console
 git clone -b 0.1.4 git@github.com:Triplkrypl/avr-net-enc28j60.git
 ```
+
+Development version **0.2**
+
+[Changes](CHANGES.md)
 
 ## Requires
 
@@ -133,7 +127,7 @@ int main(){
 
 ### Callback functions
 
-If you include tcp.c, you have to define functions callback TcpOnNewConnection, TcpOnConnect, TcpOnIncomingData, TcpOnDisconnect
+If you include **tcp.c**, you have to **define** functions callback **TcpOnNewConnection**, **TcpOnConnect**, **TcpOnIncomingData**, **TcpOnDisconnect**
 You also have to define this callbacks if you include http.c and define HTTP_TCP_INCLUDED as 1
 
 ```c
@@ -184,7 +178,7 @@ void TcpOnDisconnect(const unsigned char connectionId){
 }
 ```
 
-If you include udp.c, you have to define function callback UdpOnIncomingDatagram
+If you include **udp.c**, you have to **define** function callback **UdpOnIncomingDatagram**
 
 ```c
 // function called any time if any UPD datagram income into AVR except UDP datagram cathed by synchronous wait
@@ -202,7 +196,7 @@ unsigned char UdpOnIncomingDatagram(const UdpDatagram datagram, const unsigned c
 }
 ```
 
-If you include http.c, you have to define function callback HttpOnIncomingRequest
+If you include **http.c**, you have to **define** function callback **HttpOnIncomingRequest**
 ```c
 // function called any time if http request if fully parsed and ready to be processed
 // only request incoming with destination HTTP_SERVER_PORT is allow for parsing and passed in this callback
@@ -224,7 +218,7 @@ void HttpOnIncomingRequest(const HttpRequest* request){
 
 ### Functions
 
-Functions from tcp.c TcpGetConnection, TcpConnect, TcpSendData, TcpReceiveData, TcpDisconnect
+Functions from **tcp.c TcpGetConnection**, **TcpConnect**, **TcpSendData**, **TcpReceiveData**, **TcpDisconnect**
 
 ```c
 // function return connection structure pointer with information about TCP connection remote ip, mac, port...
@@ -253,7 +247,7 @@ unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned sh
 unsigned char TcpDisconnect(const unsigned char connectionId, unsigned short timeout);
 ```
 
-Functions from udp.c UdpSendDataMac, UdpSendData, UdpSendDataTmpPort, UdpReceiveData
+Functions from **udp.c UdpSendDataMac**, **UdpSendData**, **UdpSendDataTmpPort**, **UdpReceiveData**
 
 ```c
 // send data into any host, you need know mac address,
@@ -288,7 +282,7 @@ unsigned short UdpSendDataTmpPort(const unsigned char *ip, const unsigned short 
 unsigned char UdpReceiveData(const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 ```
 
-Functions from http.c HttpParseHeaderValue, HttpSendResponse
+Functions from **http.c HttpParseHeaderValue**, **HttpSendResponse**
 
 ```c
 // function parse value from http header rows, first parameter is http message as source of headers
