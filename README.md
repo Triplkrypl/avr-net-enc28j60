@@ -3,7 +3,7 @@
 Library written in C for AVR microcontroller. This code is based on other public repository witch i do not remember where it is.
 If someone will recognize code with is not mine and will know repository i will glad add reference here.
 
-## Changes what i made.
+## Changes what i made before versioning.
 
 * Fixes:
     * icmp ping with different length works, before library not response with same icmp length as was request but with constant length
@@ -12,6 +12,14 @@ If someone will recognize code with is not mine and will know repository i will 
     * tcp can handle multiple established connections
     * synchronous wait for packet if receive different packet than expected will send received packed in to main loop function for handle except drop
     * arp broadcast responses are cached
+
+## Versions
+
+Current version **0.1.1**
+
+```console
+git clone -b 0.1.1 git@github.com:Triplkrypl/avr-net-enc28j60.git
+```
 
 ## Requires
 
