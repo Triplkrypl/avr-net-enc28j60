@@ -1,7 +1,7 @@
 # AVR Net enc28j60
 
-Library written in C for AVR microcontroller. This code is based on other public repository witch i do not remember where it is.
-If someone will recognize code with is not mine and will know repository i will glad add reference here.
+Library written in C for AVR microcontroller. This code is based on other public repository which i do not remember where it is.
+If someone will recognize code which is not mine and will know repository i will glad add reference here.
 
 ## Changes what i made before versioning.
 
