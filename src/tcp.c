@@ -345,7 +345,8 @@ static unsigned char TcpGetConnectionId(const unsigned char *buffer){
  connections[i].expectedSequence = CharsToLong(buffer + TCP_SEQ_P) + 1;
  connections[i].sendSequence = 2;
  unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
- connections[i].maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
+ connections[i].maxSegmetSize = optionPosition ? (CharsToShort(buffer + optionPosition + 2) ?: TCP_MAX_SEGMENT_SIZE) : TCP_MAX_SEGMENT_SIZE;
+ if(connections[i].maxSegmetSize > TCP_MAX_SEGMENT_SIZE){ connections[i].maxSegmetSize = TCP_MAX_SEGMENT_SIZE; }
  return i;
 }
 
@@ -440,7 +441,8 @@ unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsig
   }
   if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_SYN_V | TCP_FLAG_ACK_V)){
    unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
-   connection->maxSegmetSize = optionPosition ? CharsToShort(buffer + optionPosition + 2) : 0;
+   connection->maxSegmetSize = optionPosition ? (CharsToShort(buffer + optionPosition + 2) ?: TCP_MAX_SEGMENT_SIZE) : TCP_MAX_SEGMENT_SIZE;
+   if(connection->maxSegmetSize > TCP_MAX_SEGMENT_SIZE){ connection->maxSegmetSize = TCP_MAX_SEGMENT_SIZE; }
    TcpSendAck(buffer, connection, connection->expectedSequence, 1);
    connection->state = TCP_STATE_ESTABLISHED;
    TCP_ON_CONNECT_CALLBACK(connectionId);
@@ -473,7 +475,7 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
  unsigned char firstTry, *buffer = NetGetBuffer();
  do{
   firstTry = 1;
-  partLength = connection->maxSegmetSize ? (connection->maxSegmetSize < TCP_MAX_SEGMENT_SIZE ? connection->maxSegmetSize : TCP_MAX_SEGMENT_SIZE) : TCP_MAX_SEGMENT_SIZE;
+  partLength = connection->maxSegmetSize;
   if(dataLength - offset < partLength){
    partLength = dataLength - offset;
   }
