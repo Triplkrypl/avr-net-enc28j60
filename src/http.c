@@ -40,6 +40,10 @@
 #define HTTP_413_POS 4
 #define HTTP_411_POS 5
 
+#ifndef HTTP_HEADER_ROW_BREAK
+#define HTTP_HEADER_ROW_BREAK "\r\n"
+#endif
+
 typedef struct{
  unsigned short headersLenght;
  unsigned char headers[HTTP_MAX_HEADER_ROWS_LENGTH+1];
@@ -196,13 +200,13 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
    }
   }
  }
- unsigned char staticHeaders[51];
+ unsigned char staticHeaders[52];
  int printResult = snprintf(staticHeaders, 50, "HTTP/1.0 %u %s", status->code, status->message ?: "Shit Happens");
  if(printResult < 0 || printResult >= 50){
   TcpDisconnect(connectionId, 5000);
   return 0;
  }
- strcat(staticHeaders, "\n");
+ strcat(staticHeaders, HTTP_HEADER_ROW_BREAK);
  if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
   TcpDisconnect(connectionId, 5000);
   return 0;
@@ -213,7 +217,7 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
    return 0;
   }
  }
- snprintf(staticHeaders, 51, "Connection: close\nContent-Length: %u\n\n", dataLength);
+ snprintf(staticHeaders, 52, "Connection: close" HTTP_HEADER_ROW_BREAK "Content-Length: %u" HTTP_HEADER_ROW_BREAK HTTP_HEADER_ROW_BREAK, dataLength);
  if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
   TcpDisconnect(connectionId, 5000);
   return 0;

@@ -96,6 +96,9 @@ Development version **0.2**
 // if you want implement other protocol which used tcp and use http to, turn tcp callback on
 // all tcp callback is not call on packet related to http protocol, this packets is handled inside http.c
 #define HTTP_TCP_INCLUDED 0
+// you can define end of all outgoing http header rows by default is used windows row ending,
+// change only if you know than application on other side accept other row ending
+//#define HTTP_HEADER_ROW_BREAK "\r\n"
 
 // you have to define your cpu frequency because of delay.h library
 #define F_CPU 16000000UL
@@ -301,10 +304,10 @@ const HttpHeaderValue HttpParseHeaderValue(const HttpMessage *message, const uns
 // can be called only once per callback call and only if request is processed, in other http listener internal state return 0 as error
 // if HttpStatus.message is 0 pointer default status message is filed by library
 // headers parameter is all additional response header rows example:
-// ContentType: json
-// Language: en
-//
-// all header row have to end with \n character
+// "ContentType: json" HTTP_HEADER_ROW_BREAK
+// "Language: en" HTTP_HEADER_ROW_BREAK
+// all header rows have to end with HTTP_HEADER_ROW_BREAK string value
+// usage of defined constant HTTP_HEADER_ROW_BREAK is important due to consistent rows end sent by library and rows end in application
 // headersLength parameter is length of headers parameter in bytes, if zero length is set no additional headers are send and headers parameter is ignored
 // data parameter is data send in response body if dataLength is zero no body is send and data parameter is ignored
 unsigned char HttpSendResponse(const HttpStatus *status, unsigned char *headers, unsigned short headersLength, unsigned char *data, unsigned short dataLength);
