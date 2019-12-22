@@ -345,7 +345,7 @@ const HttpHeaderValue HttpParseHeaderValue(const HttpRequest *request, const uns
  }
  unsigned short i;
  for(i=0; i<headerValue.length; i++){
-  if(headerValue.value[i] == '\n'){
+  if(headerValue.value[i] == '\n' || headerValue.value[i] == '\r'){
    headerValue.length = i;
    break;
   }
