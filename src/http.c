@@ -101,7 +101,7 @@ static HttpRequest incomingRequest;
 //
 //*****************************************************************************************
 static unsigned char HttpHeadersPutChar(unsigned char ch){
- if(ch == '\n' && incomingMessage.headersLenght == 0){
+ if((ch == '\n' || ch  == '\r') && incomingMessage.headersLenght == 0){
   return 1;
  }
  if(incomingMessage.headersLenght >= HTTP_MAX_HEADER_ROWS_LENGTH){
@@ -140,7 +140,7 @@ static unsigned char HttpParseHeader(const unsigned char ch, unsigned char *head
  if(*headerState == HTTP_STATE_MAC_END_HEADER){
   if(ch == '\n'){
    *headerState = HTTP_STATE_WIN_END_HEADER;
-   return 1;
+   return HttpHeadersPutChar(ch);
   }
   if(ch == '\r'){
    *headerState = HTTP_STATE_END_HEADER;
@@ -170,7 +170,6 @@ static unsigned char HttpParseHeader(const unsigned char ch, unsigned char *head
  if(*headerState == HTTP_STATE_HEADER){
   if(ch == '\r'){
    *headerState = HTTP_STATE_MAC_END_HEADER;
-   return HttpHeadersPutChar('\n');
   }
   if(ch == '\n'){
    *headerState = HTTP_STATE_LINUX_END_HEADER;
