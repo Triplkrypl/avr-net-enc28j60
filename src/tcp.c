@@ -401,13 +401,14 @@ static void TcpClose(unsigned char *buffer, TcpConnection *connection, const uns
    TcpSendPacket(buffer, connection, TCP_FLAG_FIN_V | TCP_FLAG_ACK_V, 0);
   }
   if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_ACK_V)){
-   return;
+   break;
   }
   waiting++;
   if(waiting > timeout){
    break;
   }
  }
+ connection->state = TCP_STATE_NO_CONNECTION;
 }
 
 //********************************************************************************************
@@ -600,7 +601,6 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
    TCP_ON_DISCONNECT_CALLBACK(connectionId);
    TcpClose(buffer, connections + connectionId, 1000);
   }
-  connections[connectionId].state = TCP_STATE_NO_CONNECTION;
  }
  if(connections[connectionId].state != TCP_STATE_ESTABLISHED){
   return;
