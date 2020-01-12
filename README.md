@@ -237,7 +237,9 @@ unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsig
 // you can send bigger data than NET_BUFFER_SIZE if you do this data is send in multiple packet
 unsigned char TcpSendData(const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
 
-// synchronous waiting for data with timeout, after receive data is accessible by double pointer **data variable
+// synchronous waiting for data with milliseconds timeout, zero timeout value means infinite waiting,
+// in infinite timeout, function ends only if receive data or connection is closed
+// after receive data are accessible by double pointer **data parameter
 // this function is good if you send data as client and waiting for response from server,
 // not use this function in TcpOnIncomingData on parameter connectionId another data will came in next callback call
 // receive data by this function will never be send into TcpOnIncomingData callback

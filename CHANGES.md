@@ -6,6 +6,8 @@
 * Definition **HTTP_HEADER_ROW_BREAK** added with default value "\r\n", all outgoing http header rows end with this defined value, even application header rows must
 * Incoming http header rows stored in **HttpMessage.headers** are with **raw row ending**, "\r\n" sequence not converted into "\n"
 
+* Function **TcpReceiveData** parameter **timeout** has different behavior with zero value, it is means infinite timeout for data
+
 ## Changes what i made before versioning.
 
 * Fixes:
