@@ -34,12 +34,6 @@
 
 #define HTTP_REQUEST_STATE_REQUEST_HANDLING 12
 
-#define HTTP_400_POS 1
-#define HTTP_431_POS 2
-#define HTTP_414_POS 3
-#define HTTP_413_POS 4
-#define HTTP_411_POS 5
-
 #ifndef HTTP_HEADER_ROW_BREAK
 #define HTTP_HEADER_ROW_BREAK "\r\n"
 #endif
@@ -79,15 +73,6 @@ void TcpOnDisconnect(const unsigned char connectionId);
 const HttpHeaderValue HttpParseHeaderValue(const HttpMessage *message, const unsigned char *header);
 void HttpOnIncomingRequest(const HttpRequest *request);
 
-const static HttpStatus statuses[] = {
- {200, "OK"},
- {400, "Bad Request"},
- {431, "Request Header Fields Too Large"},
- {414, "URI Too Long"},
- {413, "Payload Too Large"},
- {411, "Length Required"},
- {204, "No Content"}
-};
 static unsigned short incomingPosition;
 static unsigned char incomingRequestConnectionId;
 static unsigned char incomingRequestState;
@@ -190,15 +175,6 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
   return 0;
  }
  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
- if(!status->message){
-  unsigned char i;
-  for(i=0; i<sizeof(statuses); i++){
-   if(statuses[i].code == status->code){
-    status = statuses + i;
-    break;
-   }
-  }
- }
  unsigned char staticHeaders[52];
  int printResult = snprintf(staticHeaders, 50, "HTTP/1.0 %u %s", status->code, status->message ?: "Shit Happens");
  if(printResult < 0 || printResult >= 50){
@@ -248,12 +224,12 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
    return 1;
   }
   if(ch < 'A' || ch > 'Z'){
-   HttpStatus status = {400, "Method Contains Illegal Chars"};
+   HttpStatus status = {400, "Header Syntax Error"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
   if(incomingPosition >= HTTP_MAX_METHOD_LENGTH){
-   HttpStatus status = {431, "Method Too Long"};
+   HttpStatus status = {431, "Header Part Too Large"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
@@ -269,7 +245,8 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
    return 1;
   }
   if(incomingRequest.urlLength >= HTTP_MAX_URL_LENGTH){
-   HttpSendResponseHeader(incomingRequestConnectionId, statuses + HTTP_414_POS, 0, 0, 0);
+   HttpStatus status = {414, "URI Too Long"};
+   HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
   incomingRequest.url[incomingRequest.urlLength] = ch;
@@ -290,7 +267,7 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
    return 1;
   }
   if(incomingPosition >= HTTP_MAX_VERSION_LENGTH){
-   HttpStatus status = {431, "Version Too Long"};
+   HttpStatus status = {431, "Header Part Too Large"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
@@ -301,12 +278,13 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
  // parse rest header rows
  if(incomingRequestState >= HTTP_STATE_LINUX_END_HEADER && incomingRequestState <= HTTP_STATE_HEADER){
   if(!HttpParseHeader(ch, &incomingRequestState)){
-   HttpSendResponseHeader(incomingRequestConnectionId, statuses + HTTP_431_POS, 0, 0, 0);
+   HttpStatus status = {431, "Header Part Too Large"};
+   HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
   return 1;
  }
- HttpStatus status = {400, "Headers Syntax Error"};
+ HttpStatus status = {400, "Header Syntax Error"};
  HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
  return 0;
 }
@@ -470,17 +448,19 @@ void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char
   }else{
    const HttpHeaderValue contentLength = HttpParseHeaderValue(&incomingMessage, "Content-Length");
    if(!contentLength.value){
-    HttpSendResponseHeader(connectionId, statuses + HTTP_411_POS, 0, 0, 0);
+    HttpStatus status = {411, "Length Required"};
+    HttpSendResponseHeader(connectionId, &status, 0, 0, 0);
     return;
    }
    unsigned long httpDataLength;
    if(!ParseLong(&httpDataLength, contentLength.value, contentLength.length)){
-    HttpStatus status = {400, "Header Content-Length Syntax Error"};
+    HttpStatus status = {400, "Header Syntax Error"};
     HttpSendResponseHeader(connectionId, &status, 0, 0, 0);
     return;
    }
    if(httpDataLength > HTTP_MAX_DATA_LENGTH){
-    HttpSendResponseHeader(connectionId, statuses + HTTP_413_POS, 0, 0, 0);
+    HttpStatus status = {413, "Payload Too Large"};
+    HttpSendResponseHeader(connectionId, &status, 0, 0, 0);
     return;
    }
    HttpMessagePutData(data, dataLength, dataPosition);
@@ -501,7 +481,7 @@ void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char
   }
   return;
  }
- HttpStatus status = {400, "Request is in invalid state"};
+ HttpStatus status = {400, "Request Is In Invalid State"};
  HttpSendResponseHeader(connectionId, &status, 0, 0, 0);
  return;
 }

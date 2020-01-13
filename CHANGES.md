@@ -5,6 +5,7 @@
 * Changed behavior **if HttpSendResponse is not called in HttpOnIncomingRequest**, library will **close connection instead** of **send Http 204 response**
 * Definition **HTTP_HEADER_ROW_BREAK** added with default value "\r\n", all outgoing http header rows end with this defined value, even application header rows must
 * Incoming http header rows stored in **HttpMessage.headers** are with **raw row ending**, "\r\n" sequence not converted into "\n"
+* Function HttpSendResponse now not lookup default status message for status code if HttpStatus.message is zero pointer, only default fallback message is used
 
 * Function **TcpReceiveData** parameter **timeout** has different behavior with zero value, it is means infinite timeout for data
 
