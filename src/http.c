@@ -16,7 +16,6 @@
 #endif
 
 #define HTTP_MAX_METHOD_LENGTH 10
-#define HTTP_MAX_VERSION_LENGTH 10
 
 #define HTTP_REQUEST_STATE_NO_REQUEST 0
 #define HTTP_REQUEST_STATE_START_REQUEST 1
@@ -41,7 +40,6 @@
 typedef struct{
  unsigned short headersLenght;
  unsigned char headers[HTTP_MAX_HEADER_ROWS_LENGTH+1];
- unsigned char version[HTTP_MAX_VERSION_LENGTH+1];
  unsigned char data[HTTP_MAX_DATA_LENGTH];
  unsigned char dataLength;
 } HttpMessage;
@@ -73,7 +71,6 @@ void TcpOnDisconnect(const unsigned char connectionId);
 const HttpHeaderValue HttpParseHeaderValue(const HttpMessage *message, const unsigned char *header);
 void HttpOnIncomingRequest(const HttpRequest *request);
 
-static unsigned short incomingPosition;
 static unsigned char incomingRequestConnectionId;
 static unsigned char incomingRequestState;
 static HttpMessage incomingMessage;
@@ -213,13 +210,13 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
 static unsigned char HttpParseRequestHeader(const unsigned char ch){
  if(incomingRequestState == HTTP_REQUEST_STATE_START_REQUEST){
   incomingRequestState = HTTP_REQUEST_STATE_METHOD;
-  incomingPosition = 0;
+  incomingRequest.urlLength = 0;
  }
  // parse http method
  if(incomingRequestState == HTTP_REQUEST_STATE_METHOD){
   if(ch == ' '){
    incomingRequestState = HTTP_REQUEST_STATE_URL;
-   incomingRequest.method[incomingPosition] = 0;
+   incomingRequest.method[incomingRequest.urlLength] = 0;
    incomingRequest.urlLength = 0;
    return 1;
   }
@@ -228,20 +225,19 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
-  if(incomingPosition >= HTTP_MAX_METHOD_LENGTH){
+  if(incomingRequest.urlLength >= HTTP_MAX_METHOD_LENGTH){
    HttpStatus status = {431, "Header Part Too Large"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
-  incomingRequest.method[incomingPosition] = ch;
-  incomingPosition++;
+  incomingRequest.method[incomingRequest.urlLength] = ch;
+  incomingRequest.urlLength++;
   return 1;
  }
  // parse url
  if(incomingRequestState == HTTP_REQUEST_STATE_URL){
   if(ch == ' '){
    incomingRequestState = HTTP_REQUEST_STATE_VERSION;
-   incomingPosition = 0;
    return 1;
   }
   if(incomingRequest.urlLength >= HTTP_MAX_URL_LENGTH){
@@ -256,7 +252,6 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
  // parse http version
  if(incomingRequestState == HTTP_REQUEST_STATE_VERSION){
   if(ch == '\r' || ch == '\n'){
-   incomingMessage.version[incomingPosition] = 0;
    incomingMessage.headersLenght = 0;
    if(ch == '\r'){
     incomingRequestState = HTTP_STATE_MAC_END_HEADER;
@@ -266,13 +261,6 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
    }
    return 1;
   }
-  if(incomingPosition >= HTTP_MAX_VERSION_LENGTH){
-   HttpStatus status = {431, "Header Part Too Large"};
-   HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
-   return 0;
-  }
-  incomingMessage.version[incomingPosition] = ch;
-  incomingPosition++;
   return 1;
  }
  // parse rest header rows
@@ -388,7 +376,6 @@ unsigned char HttpTcpOnNewConnection(const unsigned char connectionId){
  }
  incomingRequestConnectionId = connectionId;
  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
- incomingPosition = 0;
  incomingRequest.connection = connection;
  return NET_HANDLE_RESULT_OK;
 }
