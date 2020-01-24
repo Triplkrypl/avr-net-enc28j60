@@ -210,7 +210,16 @@ If you include http.c, you have to define function callback HttpOnIncomingReques
 // response is not returned as return value because otherwise is dynamic allocation needed
 // if HttpSendResponse is not called, library return 204 response because nothing is send
 // any 404 and 500 or other applications errors have to be handled in application
-void HttpOnIncomingRequest(const HttpRequest* request);
+void HttpOnIncomingRequest(const HttpRequest* request){
+ if(strcmp(request->method, "GET") == 0 && CharsCmp(request->url, request->urlLength, "/some-url", strlen("/some-url"))){
+  // do some logic
+  HttpStatus status = {200, "OK"};
+  HttpSendResponse(&status, "SomeHeader: :-)\n", strlen("SomeHeader: :-)\n"), "SomeData", strlen("SomeData"));
+  return;
+ }
+ HttpStatus status = {404, "Not Found"};
+ HttpSendResponse(&status, 0, 0, 0, 0);
+}
 ```
 
 ### Functions
