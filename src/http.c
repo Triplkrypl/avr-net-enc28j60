@@ -172,14 +172,14 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
   return 0;
  }
  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
- unsigned char staticHeaders[52];
- int printResult = snprintf(staticHeaders, 50, "HTTP/1.0 %u %s", status->code, status->message ?: "Shit Happens");
- if(printResult < 0 || printResult >= 50){
-  TcpDisconnect(connectionId, 5000);
-  return 0;
+ {
+  int printResult = snprintf(incomingRequest.url, HTTP_MAX_URL_LENGTH, "HTTP/1.0 %u %s" HTTP_HEADER_ROW_BREAK, status->code, status->message ?: "Shit Happens");
+  if(printResult < 0 || printResult >= HTTP_MAX_URL_LENGTH){
+   TcpDisconnect(connectionId, 5000);
+   return 0;
+  }
  }
- strcat(staticHeaders, HTTP_HEADER_ROW_BREAK);
- if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
+ if(!TcpSendData(connectionId, 60000, incomingRequest.url, strlen(incomingRequest.url))){
   TcpDisconnect(connectionId, 5000);
   return 0;
  }
@@ -189,8 +189,8 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
    return 0;
   }
  }
- snprintf(staticHeaders, 52, "Connection: close" HTTP_HEADER_ROW_BREAK "Content-Length: %u" HTTP_HEADER_ROW_BREAK HTTP_HEADER_ROW_BREAK, dataLength);
- if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
+ snprintf(incomingRequest.url, HTTP_MAX_URL_LENGTH, "Connection: close" HTTP_HEADER_ROW_BREAK "Content-Length: %u" HTTP_HEADER_ROW_BREAK HTTP_HEADER_ROW_BREAK, dataLength);
+ if(!TcpSendData(connectionId, 60000, incomingRequest.url, strlen(incomingRequest.url))){
   TcpDisconnect(connectionId, 5000);
   return 0;
  }
@@ -226,7 +226,7 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
    return 0;
   }
   if(incomingRequest.urlLength >= HTTP_MAX_METHOD_LENGTH){
-   HttpStatus status = {431, "Header Part Too Large"};
+   HttpStatus status = {431, "Header Part Too Long"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
@@ -266,7 +266,7 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
  // parse rest header rows
  if(incomingRequestState >= HTTP_STATE_LINUX_END_HEADER && incomingRequestState <= HTTP_STATE_HEADER){
   if(!HttpParseHeader(ch, &incomingRequestState)){
-   HttpStatus status = {431, "Header Part Too Large"};
+   HttpStatus status = {431, "Header Part Too Long"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }

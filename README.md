@@ -207,11 +207,13 @@ If you include **http.c**, you have to **define** function callback **HttpOnInco
 // response is not returned as return value because otherwise is dynamic allocation needed
 // if HttpSendResponse is not called, library close tcp connection without send any response after callback ends
 // any 404 and 500 or other applications errors have to be handled in application
+// request analysis in application must be made before any other http communication,
+// global memory allocated for request is reused for save memory on stack and data can be modified
 void HttpOnIncomingRequest(const HttpRequest* request){
  if(strcmp(request->method, "GET") == 0 && CharsCmp(request->url, request->urlLength, "/some-url", strlen("/some-url"))){
   // do some logic
   HttpStatus status = {200, "OK"};
-  HttpSendResponse(&status, "SomeHeader: :-)\n", strlen("SomeHeader: :-)\n"), "SomeData", strlen("SomeData"));
+  HttpSendResponse(&status, "SomeHeader: :-)" HTTP_HEADER_ROW_BREAK, strlen("SomeHeader: :-)" HTTP_HEADER_ROW_BREAK), "SomeData", strlen("SomeData"));
   return;
  }
  HttpStatus status = {404, "Not Found"};
