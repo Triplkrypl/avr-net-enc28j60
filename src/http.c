@@ -195,19 +195,23 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
  unsigned char staticHeaders[51];
  int printResult = snprintf(staticHeaders, 50, "HTTP/1.0 %u %s", status->code, status->message ?: "Shit Happens");
  if(printResult < 0 || printResult >= 50){
+  TcpDisconnect(connectionId, 5000);
   return 0;
  }
  strcat(staticHeaders, "\n");
  if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
+  TcpDisconnect(connectionId, 5000);
   return 0;
  }
  if(headersLength){
   if(!TcpSendData(connectionId, 60000, headers, headersLength)){
+   TcpDisconnect(connectionId, 5000);
    return 0;
   }
  }
  snprintf(staticHeaders, 51, "Connection: close\nContent-Length: %u\n\n", dataLength);
  if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
+  TcpDisconnect(connectionId, 5000);
   return 0;
  }
  if(dataLength == 0){
@@ -371,6 +375,7 @@ unsigned char HttpSendResponse(const HttpStatus *status, unsigned char *headers,
   return 1;
  }
  if(!TcpSendData(connectionId, 60000, data, dataLength)){
+  TcpDisconnect(connectionId, 5000);
   return 0;
  }
  TcpDisconnect(connectionId, 5000);
