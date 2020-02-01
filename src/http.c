@@ -173,11 +173,20 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
  }
  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
  {
-  int printResult = snprintf(incomingRequest.url, HTTP_MAX_URL_LENGTH, "HTTP/1.0 %u %s" HTTP_HEADER_ROW_BREAK, status->code, status->message ?: "Shit Happens");
-  if(printResult < 0 || printResult >= HTTP_MAX_URL_LENGTH){
+  const unsigned char *statusMessage = status->message ?: "Shit Happens";
+  // check length for first header row
+  unsigned short length = 8 + 2 + 5 + strlen(statusMessage) + strlen(HTTP_HEADER_ROW_BREAK);
+  if(length > HTTP_MAX_URL_LENGTH){
    TcpDisconnect(connectionId, 5000);
    return 0;
   }
+  // check length for last header row
+  length = 17 + 16 + 5 + (3 * strlen(HTTP_HEADER_ROW_BREAK));
+  if(length > HTTP_MAX_URL_LENGTH){
+   TcpDisconnect(connectionId, 5000);
+   return 0;
+  }
+  snprintf(incomingRequest.url, HTTP_MAX_URL_LENGTH, "HTTP/1.0 %u %s" HTTP_HEADER_ROW_BREAK, status->code, statusMessage);
  }
  if(!TcpSendData(connectionId, 60000, incomingRequest.url, strlen(incomingRequest.url))){
   TcpDisconnect(connectionId, 5000);
