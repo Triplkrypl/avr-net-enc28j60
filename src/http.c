@@ -181,7 +181,7 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
    return 0;
   }
   // check length for last header row
-  length = 17 + 16 + 5 + (3 * strlen(HTTP_HEADER_ROW_BREAK));
+  length = 16 + 5 + (2 * strlen(HTTP_HEADER_ROW_BREAK));
   if(length > HTTP_MAX_URL_LENGTH){
    TcpDisconnect(connectionId, 5000);
    return 0;
@@ -198,7 +198,7 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
    return 0;
   }
  }
- snprintf(incomingRequest.url, HTTP_MAX_URL_LENGTH, "Connection: close" HTTP_HEADER_ROW_BREAK "Content-Length: %u" HTTP_HEADER_ROW_BREAK HTTP_HEADER_ROW_BREAK, dataLength);
+ snprintf(incomingRequest.url, HTTP_MAX_URL_LENGTH, "Content-Length: %u" HTTP_HEADER_ROW_BREAK HTTP_HEADER_ROW_BREAK, dataLength);
  if(!TcpSendData(connectionId, 60000, incomingRequest.url, strlen(incomingRequest.url))){
   TcpDisconnect(connectionId, 5000);
   return 0;
