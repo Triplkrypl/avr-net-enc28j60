@@ -163,7 +163,7 @@ static inline unsigned short TcpChecksum(const unsigned char *buffer){
 // Description : send tcp packet to network.
 //
 //********************************************************************************************
-static void TcpSendPacket(unsigned char *buffer, const TcpConnection *connection, const unsigned char flags, unsigned short dlength){
+static void TcpSendPacket(unsigned char *buffer, const TcpConnection *connection, unsigned long sendSequence, const unsigned char flags, unsigned short dlength){
  eth_generate_header(buffer, ETH_TYPE_IP_V, connection->mac);
  if(flags & TCP_FLAG_SYN_V){
   // setup maximum segment size
@@ -180,7 +180,7 @@ static void TcpSendPacket(unsigned char *buffer, const TcpConnection *connection
   buffer[TCP_HEADER_LEN_P] = 0x50;
  }
  ip_generate_header(buffer, IP_HEADER_LEN + TCP_HEADER_LEN + dlength, IP_PROTO_TCP_V, connection->ip);
- TcpSetSequence(buffer, connection->sendSequence, connection->expectedSequence);
+ TcpSetSequence(buffer, sendSequence, connection->expectedSequence);
  TcpSetPort(buffer, connection->remotePort, connection->port);
  // setup tcp flags
  buffer[TCP_FLAGS_P] = flags;
@@ -239,7 +239,7 @@ static unsigned char TcpSendAck(unsigned char *buffer, TcpConnection *connection
  if(expectedData){
   connection->expectedSequence += dataLength;
  }
- TcpSendPacket(buffer, connection, TCP_FLAG_ACK_V, 0);
+ TcpSendPacket(buffer, connection, connection->sendSequence, TCP_FLAG_ACK_V, 0);
  return expectedData;
 }
 
@@ -353,10 +353,10 @@ static unsigned char TcpGetConnectionId(const unsigned char *buffer){
 //********************************************************************************************
 //
 // Function : TcpWaitPacket
-// Description : synchronous waiting for any tcp packet if sendedDataLength is zero function expect than waiting is for data packet
+// Description : synchronous waiting for any tcp packet if expectedAck is connection->sendSequence function expect than waiting is for data packet
 //
 //********************************************************************************************
-static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connection, unsigned short sendedDataLength, unsigned char expectedFlag){
+static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connection, unsigned long expectedAck, unsigned char expectedFlag){
  unsigned short length = EthWaitPacket(buffer, ETH_TYPE_IP_V, 0);
  if(length != 0){
   if(ip_packet_is_ip(buffer) && buffer[IP_PROTO_P] == IP_PROTO_TCP_V){
@@ -369,13 +369,12 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
     TcpIsConnection(buffer, connection, CharsToShort(buffer + TCP_DST_PORT_P), CharsToShort(buffer + TCP_SRC_PORT_P)) &&
     (!((~buffer[ TCP_FLAGS_P ]) & expectedFlag)) &&
     ((connection->expectedSequence == seq) || (expectedFlag & TCP_FLAG_SYN_V)) &&
-    (connection->sendSequence + sendedDataLength) == ack
+    expectedAck == ack
    ){
     if(expectedFlag & TCP_FLAG_SYN_V){
      connection->expectedSequence = seq;
     }
-    connection->sendSequence = ack;
-    if((TcpGetDataLength(buffer) != 0 || buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && sendedDataLength != 0) {
+    if((TcpGetDataLength(buffer) != 0 || buffer[TCP_FLAGS_P] & TCP_FLAG_FIN_V) && connection->sendSequence == expectedAck) {
      TcpHandleIncomingPacket(buffer, length);
     }
     return 1;
@@ -396,11 +395,13 @@ static unsigned char TcpWaitPacket(unsigned char *buffer, TcpConnection *connect
 //********************************************************************************************
 static void TcpClose(unsigned char *buffer, TcpConnection *connection, const unsigned short timeout){
  unsigned short waiting = 0;
+ unsigned long sendSequence = connection->sendSequence;
+ connection->sendSequence += 1;
  for(;;){
   if(waiting % 300 == 0){
-   TcpSendPacket(buffer, connection, TCP_FLAG_FIN_V | TCP_FLAG_ACK_V, 0);
+   TcpSendPacket(buffer, connection, sendSequence, TCP_FLAG_FIN_V | TCP_FLAG_ACK_V, 0);
   }
-  if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_ACK_V)){
+  if(TcpWaitPacket(buffer, connection, sendSequence + 1, TCP_FLAG_ACK_V)){
    break;
   }
   waiting++;
@@ -436,11 +437,13 @@ unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsig
   return TCP_INVALID_CONNECTION_ID;
  }
  unsigned short waiting = 0;
+ unsigned long sendSequence = connection->sendSequence;
+ connection->sendSequence += 1;
  for(;;){
   if(waiting % 300 == 0){
-   TcpSendPacket(buffer, connection, TCP_FLAG_SYN_V, 0);
+   TcpSendPacket(buffer, connection, sendSequence, TCP_FLAG_SYN_V, 0);
   }
-  if(TcpWaitPacket(buffer, connection, 1, TCP_FLAG_SYN_V | TCP_FLAG_ACK_V)){
+  if(TcpWaitPacket(buffer, connection, sendSequence + 1, TCP_FLAG_SYN_V | TCP_FLAG_ACK_V)){
    unsigned short optionPosition = TcpGetOptionPosition(buffer, TCP_OPTION_MAX_SEGMET_SIZE_KIND);
    connection->maxSegmetSize = optionPosition ? (CharsToShort(buffer + optionPosition + 2) ?: TCP_MAX_SEGMENT_SIZE) : TCP_MAX_SEGMENT_SIZE;
    if(connection->maxSegmetSize > TCP_MAX_SEGMENT_SIZE){ connection->maxSegmetSize = TCP_MAX_SEGMENT_SIZE; }
@@ -480,16 +483,18 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
   if(dataLength - offset < partLength){
    partLength = dataLength - offset;
   }
+  unsigned long sendSequence = connection->sendSequence;
+  connection->sendSequence += partLength;
   for(;;){
    if(connection->state != TCP_STATE_ESTABLISHED){
     return 0;
    }
    if(waiting % 200 == 0 || firstTry){
     memcpy(buffer + TCP_DATA_P, data + offset, partLength);
-    TcpSendPacket(buffer, connection, TCP_FLAG_ACK_V, partLength);
+    TcpSendPacket(buffer, connection, sendSequence, TCP_FLAG_ACK_V, partLength);
     firstTry = 0;
    }
-   if(TcpWaitPacket(buffer, connection, partLength, TCP_FLAG_ACK_V)){
+   if(TcpWaitPacket(buffer, connection, sendSequence + partLength, TCP_FLAG_ACK_V)){
     break;
    }
    waiting++;
@@ -520,7 +525,7 @@ unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned sh
   if(connection->state != TCP_STATE_ESTABLISHED){
    return 0;
   }
-  if(TcpWaitPacket(buffer, connection, 0, TCP_FLAG_ACK_V)){
+  if(TcpWaitPacket(buffer, connection, connection->sendSequence, TCP_FLAG_ACK_V)){
    *data = buffer + TcpGetDataPosition(buffer);
    *dataLength = TcpGetDataLength(buffer);
    TcpSendAck(buffer, connection, connection->expectedSequence, *dataLength);
@@ -583,7 +588,7 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
    }
   }
   connections[connectionId].state = TCP_STATE_SYN_RECEIVED;
-  TcpSendPacket(buffer, connections + connectionId, TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
+  TcpSendPacket(buffer, connections + connectionId, connections[connectionId].sendSequence, TCP_FLAG_SYN_V|TCP_FLAG_ACK_V, 0);
   return;
  }
  if((buffer[TCP_FLAGS_P] & TCP_FLAG_ACK_V) && connections[connectionId].state == TCP_STATE_SYN_RECEIVED){
