@@ -289,7 +289,7 @@ unsigned short UdpSendDataTmpPort(const unsigned char *ip, const unsigned short 
 unsigned char UdpReceiveData(const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 ```
 
-Functions from **http.c HttpParseHeaderValue**, **HttpSendResponse**
+Functions from **http.c HttpParseHeaderValue**, **HttpSendResponse**, **HttpSendRequest**
 
 ```c
 // function parse value from http header rows, first parameter is http message as source of headers
@@ -315,5 +315,20 @@ const HttpHeaderValue HttpParseHeaderValue(const HttpMessage *message, const uns
 // headersLength parameter is length of headers parameter in bytes, if zero length is set no additional headers are send and headers parameter is ignored
 // data parameter is data send in response body if dataLength is zero no body is send and data parameter is ignored
 unsigned char HttpSendResponse(const HttpStatus *status, unsigned char *headers, unsigned short headersLength, unsigned char *data, unsigned short dataLength);
+
+// function send http request and synchronously wait for response
+// return HttpResponse pointer on any error HttpResponse.status.code is 0 and HttpResponse.status.message contains simple error description
+// connectionTimeout parameter define how long in milliseconds function wait for successful connect before send any request data
+// requestTimeout parameter define how long function wait for response data, zero means infinite timeout
+// method chars array end with zero character
+// headers parameter contains all application request header rows example:
+// "ContentType: json" HTTP_HEADER_ROW_BREAK
+// all header rows must end with HTTP_HEADER_ROW_BREAK
+// headersLength parameter length of application header rows in bytes
+// data parameter is for request body content
+// dataLength parameter length of body content in bytes
+// HttpResponse analyze immediately before any other http communication,
+// structure share memory with HttpRequest and structure data can be rewritten
+const HttpResponse* HttpSendRequest(const unsigned char *ip, const unsigned short port, const unsigned short connectionTimeout, unsigned short requestTimeout, const unsigned char *method, const unsigned char *url, const unsigned char urlLength, const unsigned char *headers, const unsigned short headersLength, const unsigned char *data, unsigned short dataLength);
 ```
 
