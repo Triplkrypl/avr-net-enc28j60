@@ -393,7 +393,7 @@ static const HttpResponse* HttpFailedResponse(const unsigned char *message){
 // return 1 on success 0 on any error
 //
 //*****************************************************************************************
-unsigned char HttpParseResponse(const unsigned char *data, const unsigned short dataLength){
+static unsigned char HttpParseResponse(const unsigned char *data, const unsigned short dataLength){
  // parse response headers
  unsigned short dataPosition = 0;
  if(incomingResponseState < HTTP_STATE_END_HEADER){
