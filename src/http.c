@@ -16,14 +16,21 @@
 #endif
 
 #define HTTP_MAX_METHOD_LENGTH 10
-#define HTTP_MAX_VERSION_LENGTH 10
+
+#ifndef HTTP_MAX_STATUS_MESSAGE_LENGTH
+#define HTTP_MAX_STATUS_MESSAGE_LENGTH 30
+#endif
 
 #define HTTP_REQUEST_STATE_NO_REQUEST 0
 #define HTTP_REQUEST_STATE_START_REQUEST 1
 #define HTTP_REQUEST_STATE_METHOD 2
 #define HTTP_REQUEST_STATE_URL 3
-#define HTTP_REQUEST_STATE_VERSION 4
 
+#define HTTP_RESPONSE_STATE_WAITING 0
+#define HTTP_RESPONSE_STATE_CODE 1
+#define HTTP_RESPONSE_STATE_MESSAGE 2
+
+#define HTTP_STATE_VERSION 4
 #define HTTP_STATE_LINUX_END_HEADER 5
 #define HTTP_STATE_MAC_END_HEADER 6
 #define HTTP_STATE_WIN_END_HEADER 7
@@ -34,29 +41,34 @@
 
 #define HTTP_REQUEST_STATE_REQUEST_HANDLING 12
 
-#define HTTP_400_POS 1
-#define HTTP_431_POS 2
-#define HTTP_414_POS 3
-#define HTTP_413_POS 4
-#define HTTP_411_POS 5
-#define HTTP_204_POS 6
+#ifndef HTTP_HEADER_ROW_BREAK
+#define HTTP_HEADER_ROW_BREAK "\r\n"
+#endif
 
 typedef struct{
- const TcpConnection *connection;
  unsigned short headersLenght;
- unsigned char method[HTTP_MAX_METHOD_LENGTH+1];
- unsigned char url[HTTP_MAX_URL_LENGTH];
- unsigned char urlLength;
- unsigned char version[HTTP_MAX_VERSION_LENGTH+1];
  unsigned char headers[HTTP_MAX_HEADER_ROWS_LENGTH+1];
  unsigned char data[HTTP_MAX_DATA_LENGTH];
  unsigned char dataLength;
+} HttpMessage;
+
+typedef struct{
+ const TcpConnection *connection;
+ HttpMessage *message;
+ unsigned char method[HTTP_MAX_METHOD_LENGTH+1];
+ unsigned char url[HTTP_MAX_URL_LENGTH];
+ unsigned char urlLength;
 } HttpRequest;
 
 typedef struct{
  unsigned short code;
  const char *message;
 } HttpStatus;
+
+typedef struct{
+ HttpStatus status;
+ HttpMessage *message;
+} HttpResponse;
 
 typedef struct{
  unsigned short length;
@@ -69,22 +81,17 @@ void TcpOnConnect(const unsigned char connectionId);
 void TcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength);
 void TcpOnDisconnect(const unsigned char connectionId);
 #endif
-const HttpHeaderValue HttpParseHeaderValue(const HttpRequest *request, const unsigned char *header);
+const HttpHeaderValue HttpParseHeaderValue(const HttpMessage *message, const unsigned char *header);
 void HttpOnIncomingRequest(const HttpRequest *request);
 
-const static HttpStatus statuses[] = {
- {200, "OK"},
- {400, "Bad Request"},
- {431, "Request Header Fields Too Large"},
- {414, "URI Too Long"},
- {413, "Payload Too Large"},
- {411, "Length Required"},
- {204, "No Content"}
-};
-static unsigned char incomingRequestState;
-static HttpRequest incomingRequest;
 static unsigned char incomingRequestConnectionId;
-static unsigned short incomingPosition;
+static unsigned char incomingResponseConnectionId;
+static unsigned char incomingRequestState;
+static unsigned char incomingResponseState;
+static HttpMessage incomingMessage;
+static HttpRequest incomingRequest;
+static HttpResponse incomingResponse;
+static unsigned char incomingResponseStatusMessage[HTTP_MAX_STATUS_MESSAGE_LENGTH+1];
 
 //*****************************************************************************************
 //
@@ -93,14 +100,14 @@ static unsigned short incomingPosition;
 //
 //*****************************************************************************************
 static unsigned char HttpHeadersPutChar(unsigned char ch){
- if(ch == '\n' && incomingRequest.headersLenght == 0){
+ if((ch == '\n' || ch  == '\r') && incomingMessage.headersLenght == 0){
   return 1;
  }
- if(incomingRequest.headersLenght >= HTTP_MAX_HEADER_ROWS_LENGTH){
+ if(incomingMessage.headersLenght >= HTTP_MAX_HEADER_ROWS_LENGTH){
   return 0;
  }
- incomingRequest.headers[incomingRequest.headersLenght] = ch;
- incomingRequest.headersLenght++;
+ incomingMessage.headers[incomingMessage.headersLenght] = ch;
+ incomingMessage.headersLenght++;
  return 1;
 }
 
@@ -116,8 +123,8 @@ static void HttpMessagePutData(const unsigned char *data, unsigned short dataLen
  }
  dataLength -= dataPosition;
  data += dataPosition;
- memcpy(incomingRequest.data + incomingRequest.dataLength, data, dataLength);
- incomingRequest.dataLength += dataLength;
+ memcpy(incomingMessage.data + incomingMessage.dataLength, data, dataLength);
+ incomingMessage.dataLength += dataLength;
 }
 
 //*****************************************************************************************
@@ -132,12 +139,12 @@ static unsigned char HttpParseHeader(const unsigned char ch, unsigned char *head
  if(*headerState == HTTP_STATE_MAC_END_HEADER){
   if(ch == '\n'){
    *headerState = HTTP_STATE_WIN_END_HEADER;
-   return 1;
+   return HttpHeadersPutChar(ch);
   }
   if(ch == '\r'){
    *headerState = HTTP_STATE_END_HEADER;
-   incomingRequest.dataLength = 0;
-   incomingRequest.headers[incomingRequest.headersLenght] = 0;
+   incomingMessage.dataLength = 0;
+   incomingMessage.headers[incomingMessage.headersLenght] = 0;
    return 1;
   }
   *headerState = HTTP_STATE_HEADER;
@@ -145,8 +152,8 @@ static unsigned char HttpParseHeader(const unsigned char ch, unsigned char *head
  if(*headerState == HTTP_STATE_LINUX_END_HEADER || *headerState == HTTP_STATE_WIN_END_HEADER2){
   if(ch == '\n'){
    *headerState = HTTP_STATE_END_HEADER;
-   incomingRequest.dataLength = 0;
-   incomingRequest.headers[incomingRequest.headersLenght] = 0;
+   incomingMessage.dataLength = 0;
+   incomingMessage.headers[incomingMessage.headersLenght] = 0;
    return 1;
   }
   *headerState = HTTP_STATE_HEADER;
@@ -162,7 +169,6 @@ static unsigned char HttpParseHeader(const unsigned char ch, unsigned char *head
  if(*headerState == HTTP_STATE_HEADER){
   if(ch == '\r'){
    *headerState = HTTP_STATE_MAC_END_HEADER;
-   return HttpHeadersPutChar('\n');
   }
   if(ch == '\n'){
    *headerState = HTTP_STATE_LINUX_END_HEADER;
@@ -183,23 +189,23 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
   return 0;
  }
  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
- if(!status->message){
-  unsigned char i;
-  for(i=0; i<sizeof(statuses); i++){
-   if(statuses[i].code == status->code){
-    status = statuses + i;
-    break;
-   }
+ {
+  const unsigned char *statusMessage = status->message ?: "Shit Happens";
+  // check length for first header row
+  unsigned short length = 8 + 2 + 5 + strlen(statusMessage) + strlen(HTTP_HEADER_ROW_BREAK);
+  if(length > HTTP_MAX_URL_LENGTH){
+   TcpDisconnect(connectionId, 5000);
+   return 0;
   }
+  // check length for last header row
+  length = 16 + 5 + (2 * strlen(HTTP_HEADER_ROW_BREAK));
+  if(length > HTTP_MAX_URL_LENGTH){
+   TcpDisconnect(connectionId, 5000);
+   return 0;
+  }
+  snprintf(incomingRequest.url, HTTP_MAX_URL_LENGTH, "HTTP/1.0 %u %s" HTTP_HEADER_ROW_BREAK, status->code, statusMessage);
  }
- unsigned char staticHeaders[51];
- int printResult = snprintf(staticHeaders, 50, "HTTP/1.0 %u %s", status->code, status->message ?: "Shit Happens");
- if(printResult < 0 || printResult >= 50){
-  TcpDisconnect(connectionId, 5000);
-  return 0;
- }
- strcat(staticHeaders, "\n");
- if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
+ if(!TcpSendData(connectionId, 60000, incomingRequest.url, strlen(incomingRequest.url))){
   TcpDisconnect(connectionId, 5000);
   return 0;
  }
@@ -209,8 +215,8 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
    return 0;
   }
  }
- snprintf(staticHeaders, 51, "Connection: close\nContent-Length: %u\n\n", dataLength);
- if(!TcpSendData(connectionId, 60000, staticHeaders, strlen(staticHeaders))){
+ snprintf(incomingRequest.url, HTTP_MAX_URL_LENGTH, "Content-Length: %u" HTTP_HEADER_ROW_BREAK HTTP_HEADER_ROW_BREAK, dataLength);
+ if(!TcpSendData(connectionId, 60000, incomingRequest.url, strlen(incomingRequest.url))){
   TcpDisconnect(connectionId, 5000);
   return 0;
  }
@@ -230,39 +236,39 @@ static unsigned char HttpSendResponseHeader(const unsigned char connectionId, co
 static unsigned char HttpParseRequestHeader(const unsigned char ch){
  if(incomingRequestState == HTTP_REQUEST_STATE_START_REQUEST){
   incomingRequestState = HTTP_REQUEST_STATE_METHOD;
-  incomingPosition = 0;
+  incomingRequest.urlLength = 0;
  }
  // parse http method
  if(incomingRequestState == HTTP_REQUEST_STATE_METHOD){
   if(ch == ' '){
    incomingRequestState = HTTP_REQUEST_STATE_URL;
-   incomingRequest.method[incomingPosition] = 0;
+   incomingRequest.method[incomingRequest.urlLength] = 0;
    incomingRequest.urlLength = 0;
    return 1;
   }
   if(ch < 'A' || ch > 'Z'){
-   HttpStatus status = {400, "Method Contains Illegal Chars"};
+   HttpStatus status = {400, "Header Syntax Error"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
-  if(incomingPosition >= HTTP_MAX_METHOD_LENGTH){
-   HttpStatus status = {431, "Method Too Long"};
+  if(incomingRequest.urlLength >= HTTP_MAX_METHOD_LENGTH){
+   HttpStatus status = {431, "Header Part Too Long"};
    HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
-  incomingRequest.method[incomingPosition] = ch;
-  incomingPosition++;
+  incomingRequest.method[incomingRequest.urlLength] = ch;
+  incomingRequest.urlLength++;
   return 1;
  }
  // parse url
  if(incomingRequestState == HTTP_REQUEST_STATE_URL){
   if(ch == ' '){
-   incomingRequestState = HTTP_REQUEST_STATE_VERSION;
-   incomingPosition = 0;
+   incomingRequestState = HTTP_STATE_VERSION;
    return 1;
   }
   if(incomingRequest.urlLength >= HTTP_MAX_URL_LENGTH){
-   HttpSendResponseHeader(incomingRequestConnectionId, statuses + HTTP_414_POS, 0, 0, 0);
+   HttpStatus status = {414, "URI Too Long"};
+   HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
   incomingRequest.url[incomingRequest.urlLength] = ch;
@@ -270,10 +276,9 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
   return 1;
  }
  // parse http version
- if(incomingRequestState == HTTP_REQUEST_STATE_VERSION){
+ if(incomingRequestState == HTTP_STATE_VERSION){
   if(ch == '\r' || ch == '\n'){
-   incomingRequest.version[incomingPosition] = 0;
-   incomingRequest.headersLenght = 0;
+   incomingMessage.headersLenght = 0;
    if(ch == '\r'){
     incomingRequestState = HTTP_STATE_MAC_END_HEADER;
    }
@@ -282,26 +287,153 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
    }
    return 1;
   }
-  if(incomingPosition >= HTTP_MAX_VERSION_LENGTH){
-   HttpStatus status = {431, "Version Too Long"};
-   HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
-   return 0;
-  }
-  incomingRequest.version[incomingPosition] = ch;
-  incomingPosition++;
   return 1;
  }
  // parse rest header rows
  if(incomingRequestState >= HTTP_STATE_LINUX_END_HEADER && incomingRequestState <= HTTP_STATE_HEADER){
   if(!HttpParseHeader(ch, &incomingRequestState)){
-   HttpSendResponseHeader(incomingRequestConnectionId, statuses + HTTP_431_POS, 0, 0, 0);
+   HttpStatus status = {431, "Header Part Too Long"};
+   HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
    return 0;
   }
   return 1;
  }
- HttpStatus status = {400, "Headers Syntax Error"};
+ HttpStatus status = {400, "Header Syntax Error"};
  HttpSendResponseHeader(incomingRequestConnectionId, &status, 0, 0, 0);
  return 0;
+}
+
+//*****************************************************************************************
+//
+// Function : HttpParseResponseHeader
+// Description : function take char from incoming data and decide where put them in response structure
+// return 1 on success 0 on any error
+//
+//*****************************************************************************************
+static unsigned char HttpParseResponseHeader(const unsigned char ch){
+ if(incomingResponseState == HTTP_RESPONSE_STATE_WAITING) {
+  incomingResponseState = HTTP_STATE_VERSION;
+ }
+ // parse http version
+ if(incomingResponseState == HTTP_STATE_VERSION){
+  if(ch == ' '){
+   incomingResponseState = HTTP_RESPONSE_STATE_CODE;
+   incomingResponse.status.code = 0;
+   return 1;
+  }
+  return 1;
+ }
+ // parse status code
+ if(incomingResponseState == HTTP_RESPONSE_STATE_CODE){
+  if(incomingResponse.status.code >= HTTP_MAX_STATUS_MESSAGE_LENGTH){
+   return 0;
+  }
+  if(ch == ' '){
+   unsigned long code;
+   if(!ParseLong(&code, incomingResponseStatusMessage, incomingResponse.status.code)){
+    return 0;
+   }
+   if(code > 65535){
+    return 0;
+   }
+   incomingResponse.status.code = code;
+   incomingResponseState = HTTP_RESPONSE_STATE_MESSAGE;
+   incomingMessage.headersLenght = 0;
+   return 1;
+  }
+  incomingResponseStatusMessage[incomingResponse.status.code] = ch;
+  incomingResponse.status.code++;
+  return 1;
+ }
+ // parse status message
+ if(incomingResponseState == HTTP_RESPONSE_STATE_MESSAGE){
+  if(incomingMessage.headersLenght >= HTTP_MAX_STATUS_MESSAGE_LENGTH){
+   return 0;
+  }
+  if(ch == '\r' || ch == '\n'){
+   incomingResponseStatusMessage[incomingMessage.headersLenght] = 0;
+   if(ch == '\r'){
+    incomingResponseState = HTTP_STATE_MAC_END_HEADER;
+   }
+   if(ch == '\n'){
+    incomingResponseState = HTTP_STATE_LINUX_END_HEADER;
+   }
+   incomingMessage.headersLenght = 0;
+   return 1;
+  }
+  incomingResponseStatusMessage[incomingMessage.headersLenght] = ch;
+  incomingMessage.headersLenght++;
+  return 1;
+ }
+ // parse rest header rows
+ if(incomingResponseState >= HTTP_STATE_LINUX_END_HEADER && incomingResponseState <= HTTP_STATE_HEADER){
+  return HttpParseHeader(ch, &incomingResponseState);
+ }
+ return 0;
+}
+
+//*****************************************************************************************
+//
+// Function : HttpFailedResponse
+// Description : function return pointer on empty response with invalid status code and with error status message
+//
+//*****************************************************************************************
+static const HttpResponse* HttpFailedResponse(const unsigned char *message){
+ incomingResponse.status.code = 0;
+ strcpy(incomingResponseStatusMessage, message);
+ incomingMessage.headersLenght = 0;
+ incomingMessage.dataLength = 0;
+ return &incomingResponse;
+}
+
+//*****************************************************************************************
+//
+// Function : HttpParseResponse
+// Description : function take incoming data and decide where put them in response structure
+// return 1 on success 0 on any error
+//
+//*****************************************************************************************
+static unsigned char HttpParseResponse(const unsigned char *data, const unsigned short dataLength){
+ // parse response headers
+ unsigned short dataPosition = 0;
+ if(incomingResponseState < HTTP_STATE_END_HEADER){
+  for(dataPosition=0; dataPosition<dataLength; dataPosition++){
+   if(!HttpParseResponseHeader(data[dataPosition])){
+    return 0;
+   }
+   if(incomingResponseState == HTTP_STATE_END_HEADER){
+    dataPosition++;
+    break;
+   }
+  }
+  if(incomingResponseState != HTTP_STATE_END_HEADER){
+   return 1;
+  }
+ }
+ // read response body
+ if(incomingResponseState < HTTP_STATE_END_MESSAGE){
+  unsigned long httpDataLength = 0;
+  {
+   const HttpHeaderValue length = HttpParseHeaderValue(&incomingMessage, "Content-Length");
+   if(length.value){
+    if(!ParseLong(&httpDataLength, length.value, length.length)){
+     httpDataLength = 0;
+    }
+    if(httpDataLength > HTTP_MAX_DATA_LENGTH){
+     httpDataLength = 0;
+    }
+   }
+  }
+  if(httpDataLength == 0){
+   incomingResponseState = HTTP_STATE_END_MESSAGE;
+   return 1;
+  }
+  HttpMessagePutData(data, dataLength, dataPosition);
+  if(incomingMessage.dataLength == httpDataLength){
+   incomingResponseState = HTTP_STATE_END_MESSAGE;
+  }
+ }
+ return 1;
 }
 
 //*****************************************************************************************
@@ -313,24 +445,28 @@ static unsigned char HttpParseRequestHeader(const unsigned char ch){
 void HttpInit(){
  incomingRequestState = HTTP_REQUEST_STATE_NO_REQUEST;
  incomingRequestConnectionId = TCP_INVALID_CONNECTION_ID;
+ incomingResponseConnectionId = TCP_INVALID_CONNECTION_ID;
+ incomingRequest.message = &incomingMessage;
+ incomingResponse.message = &incomingMessage;
+ incomingResponse.status.message = (char *)(&incomingResponseStatusMessage);
 }
 
 //*****************************************************************************************
 //
 // Function : HttpParseHeaderValue
-// Description : function parse header value from request
+// Description : function parse header value from message
 // return HttpHeaderValue structure with 0 pointer value property if header not found or header row have wrong syntax
 //
 //*****************************************************************************************
-const HttpHeaderValue HttpParseHeaderValue(const HttpRequest *request, const unsigned char *header){
+const HttpHeaderValue HttpParseHeaderValue(const HttpMessage *message, const unsigned char *header){
  HttpHeaderValue headerValue;
- headerValue.value = strstr(request->headers, header);
+ headerValue.value = strstr(message->headers, header);
  if(!headerValue.value){
   headerValue.length = 0;
   return headerValue;
  }
  headerValue.value += strlen(header);
- headerValue.length = request->headersLenght - (headerValue.value - request->headers);
+ headerValue.length = message->headersLenght - (headerValue.value - message->headers);
  if(!headerValue.length){
   headerValue.value = 0;
   return headerValue;
@@ -355,6 +491,85 @@ const HttpHeaderValue HttpParseHeaderValue(const HttpRequest *request, const uns
   }
  }
  return headerValue;
+}
+
+//*****************************************************************************************
+//
+// Function : HttpSendRequest
+// Description : function send request and return pointer on response
+//
+//*****************************************************************************************
+const HttpResponse* HttpSendRequest(const unsigned char *ip, const unsigned short port, const unsigned short connectionTimeout, unsigned short requestTimeout, const unsigned char *method, const unsigned char *url, const unsigned char urlLength, const unsigned char *headers, const unsigned short headersLength, const unsigned char *data, unsigned short dataLength){
+ incomingResponseState = HTTP_RESPONSE_STATE_WAITING;
+ incomingResponseConnectionId = TcpConnect(ip, port, connectionTimeout);
+ if(incomingResponseConnectionId == TCP_INVALID_CONNECTION_ID){
+  return HttpFailedResponse("Connect Failed");
+ }
+ {
+  // check length for first header row
+  unsigned short length = 8 + 2 + strlen(method) + urlLength + strlen(HTTP_HEADER_ROW_BREAK);
+  if(length > HTTP_MAX_STATUS_MESSAGE_LENGTH){
+   TcpDisconnect(incomingResponseConnectionId, 5000);
+   incomingResponseConnectionId = TCP_INVALID_CONNECTION_ID;
+   return HttpFailedResponse("Request Failed");
+  }
+  // check length for last header row
+  length = 16 + 5 + (2 * strlen(HTTP_HEADER_ROW_BREAK));
+  if(length > HTTP_MAX_STATUS_MESSAGE_LENGTH){
+   TcpDisconnect(incomingResponseConnectionId, 5000);
+   incomingResponseConnectionId = TCP_INVALID_CONNECTION_ID;
+   return HttpFailedResponse("Request Failed");
+  }
+  length = 0;
+  CharsCat(incomingResponseStatusMessage, &length, method, strlen(method));
+  CharsCat(incomingResponseStatusMessage, &length, " ", 1);
+  CharsCat(incomingResponseStatusMessage, &length, url, urlLength);
+  CharsCat(incomingResponseStatusMessage, &length, " ", 1);
+  CharsCat(incomingResponseStatusMessage, &length, "HTTP/1.0" HTTP_HEADER_ROW_BREAK, 8 + strlen(HTTP_HEADER_ROW_BREAK));
+  if(!TcpSendData(incomingResponseConnectionId, 60000, incomingResponseStatusMessage, length)){
+   TcpDisconnect(incomingResponseConnectionId, 5000);
+   incomingResponseConnectionId = TCP_INVALID_CONNECTION_ID;
+   return incomingResponseState == HTTP_STATE_END_MESSAGE ? &incomingResponse : HttpFailedResponse("Request Failed");
+  }
+ }
+ if(headersLength){
+  if(!TcpSendData(incomingResponseConnectionId, 60000, headers, headersLength)){
+   TcpDisconnect(incomingResponseConnectionId, 5000);
+   incomingResponseConnectionId = TCP_INVALID_CONNECTION_ID;
+   return incomingResponseState == HTTP_STATE_END_MESSAGE ? &incomingResponse : HttpFailedResponse("Request Failed");
+  }
+ }
+ snprintf(incomingResponseStatusMessage, HTTP_MAX_STATUS_MESSAGE_LENGTH, "Content-Length: %u" HTTP_HEADER_ROW_BREAK HTTP_HEADER_ROW_BREAK, dataLength);
+ if(!TcpSendData(incomingResponseConnectionId, 60000, incomingResponseStatusMessage, strlen(incomingResponseStatusMessage))){
+  TcpDisconnect(incomingResponseConnectionId, 5000);
+  incomingResponseConnectionId = TCP_INVALID_CONNECTION_ID;
+  return incomingResponseState == HTTP_STATE_END_MESSAGE ? &incomingResponse : HttpFailedResponse("Request Failed");
+ }
+ if(dataLength){
+  if(!TcpSendData(incomingResponseConnectionId, 60000, data, dataLength)){
+   TcpDisconnect(incomingResponseConnectionId, 5000);
+   incomingResponseConnectionId = TCP_INVALID_CONNECTION_ID;
+   return incomingResponseState == HTTP_STATE_END_MESSAGE ? &incomingResponse : HttpFailedResponse("Request Failed");
+  }
+ }
+ for(;;){
+  if(incomingResponseState == HTTP_STATE_END_MESSAGE){
+   break;
+  }
+  if(incomingResponseState != HTTP_RESPONSE_STATE_WAITING){
+   requestTimeout = 60000;
+  }
+  unsigned char *receiveData;
+  if(!TcpReceiveData(incomingResponseConnectionId, requestTimeout, &receiveData, &dataLength)){
+   break;
+  }
+  if(!HttpParseResponse(receiveData, dataLength)){
+   break;
+  }
+ }
+ TcpDisconnect(incomingResponseConnectionId, 5000);
+ incomingResponseConnectionId = TCP_INVALID_CONNECTION_ID;
+ return incomingResponseState == HTTP_STATE_END_MESSAGE ? &incomingResponse : HttpFailedResponse("Response Failed");
 }
 
 //*****************************************************************************************
@@ -402,7 +617,6 @@ unsigned char HttpTcpOnNewConnection(const unsigned char connectionId){
  }
  incomingRequestConnectionId = connectionId;
  incomingRequestState = HTTP_REQUEST_STATE_START_REQUEST;
- incomingPosition = 0;
  incomingRequest.connection = connection;
  return NET_HANDLE_RESULT_OK;
 }
@@ -415,7 +629,7 @@ unsigned char HttpTcpOnNewConnection(const unsigned char connectionId){
 //*****************************************************************************************
 void HttpTcpOnConnect(const unsigned char connectionId){
  #if HTTP_TCP_INCLUDED == 1
- if(connectionId == incomingRequestConnectionId){
+ if(connectionId == incomingRequestConnectionId || connectionId == incomingResponseConnectionId){
   return;
  }
  TcpOnConnect(connectionId);
@@ -429,6 +643,12 @@ void HttpTcpOnConnect(const unsigned char connectionId){
 //
 //*****************************************************************************************
 void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char *data, unsigned short dataLength){
+ if(connectionId == incomingResponseConnectionId){
+  if(!HttpParseResponse(data, dataLength)){
+   TcpDisconnect(connectionId, 5000);
+  }
+  return;
+ }
  if(connectionId != incomingRequestConnectionId){
   #if HTTP_TCP_INCLUDED == 1
   TcpOnIncomingData(connectionId, data, dataLength);
@@ -460,23 +680,25 @@ void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char
   if(strcmp(incomingRequest.method, "HEAD") == 0 || strcmp(incomingRequest.method, "GET") == 0 || strcmp(incomingRequest.method, "OPTIONS") == 0){
    incomingRequestState = HTTP_STATE_END_MESSAGE;
   }else{
-   const HttpHeaderValue contentLength = HttpParseHeaderValue(&incomingRequest, "Content-Length");
+   const HttpHeaderValue contentLength = HttpParseHeaderValue(&incomingMessage, "Content-Length");
    if(!contentLength.value){
-    HttpSendResponseHeader(connectionId, statuses + HTTP_411_POS, 0, 0, 0);
+    HttpStatus status = {411, "Length Required"};
+    HttpSendResponseHeader(connectionId, &status, 0, 0, 0);
     return;
    }
    unsigned long httpDataLength;
    if(!ParseLong(&httpDataLength, contentLength.value, contentLength.length)){
-    HttpStatus status = {400, "Header Content-Length Syntax Error"};
+    HttpStatus status = {400, "Header Syntax Error"};
     HttpSendResponseHeader(connectionId, &status, 0, 0, 0);
     return;
    }
    if(httpDataLength > HTTP_MAX_DATA_LENGTH){
-    HttpSendResponseHeader(connectionId, statuses + HTTP_413_POS, 0, 0, 0);
+    HttpStatus status = {413, "Payload Too Large"};
+    HttpSendResponseHeader(connectionId, &status, 0, 0, 0);
     return;
    }
    HttpMessagePutData(data, dataLength, dataPosition);
-   if(incomingRequest.dataLength == httpDataLength){
+   if(incomingMessage.dataLength == httpDataLength){
     incomingRequestState = HTTP_STATE_END_MESSAGE;
    }else{
     return;
@@ -488,12 +710,12 @@ void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char
   incomingRequestState = HTTP_REQUEST_STATE_REQUEST_HANDLING;
   HttpOnIncomingRequest(&incomingRequest);
   if(incomingRequestState == HTTP_REQUEST_STATE_REQUEST_HANDLING){
-   HttpSendResponseHeader(connectionId, statuses + HTTP_204_POS, 0, 0, 0);
+   TcpDisconnect(connectionId, 5000);
    return;
   }
   return;
  }
- HttpStatus status = {400, "Request is in invalid state"};
+ HttpStatus status = {400, "Request Is In Invalid State"};
  HttpSendResponseHeader(connectionId, &status, 0, 0, 0);
  return;
 }
@@ -505,6 +727,9 @@ void HttpTcpOnIncomingData(const unsigned char connectionId, const unsigned char
 //
 //*****************************************************************************************
 void HttpTcpOnDisconnect(const unsigned char connectionId){
+ if(connectionId == incomingResponseConnectionId){
+  return;
+ }
  if(connectionId != incomingRequestConnectionId){
   #if HTTP_TCP_INCLUDED == 1
   TcpOnDisconnect(connectionId);

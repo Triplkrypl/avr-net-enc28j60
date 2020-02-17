@@ -66,4 +66,8 @@ unsigned char CharsCmp(const unsigned char *ch1, const unsigned short length1, c
  }
  return memcmp(ch1, ch2, length1) == 0;
 }
+void CharsCat(unsigned char *destination, unsigned short *destinationLength, const unsigned char *source, const unsigned short sourceLength){
+ memcpy(destination + *destinationLength, source, sourceLength);
+ *destinationLength += sourceLength;
+}
 #endif

@@ -511,7 +511,7 @@ unsigned char TcpSendData(const unsigned char connectionId, const unsigned short
 //********************************************************************************************
 //
 // Function : TcpReceiveData
-// Description : synchronous wait for tcp data form connection with timeout
+// Description : synchronous wait for tcp data from connection with timeout in milliseconds (zero timeout is infinite wait for any data)
 //
 //********************************************************************************************
 unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned short timeout, unsigned char **data, unsigned short *dataLength){
@@ -531,9 +531,11 @@ unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned sh
    TcpSendAck(buffer, connection, connection->expectedSequence, *dataLength);
    return 1;
   }
-  waiting++;
-  if(waiting > timeout){
-   break;
+  if(timeout > 0){
+   waiting++;
+   if(waiting > timeout){
+    break;
+   }
   }
  }
  return 0;

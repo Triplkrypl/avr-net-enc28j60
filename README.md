@@ -3,16 +3,6 @@
 Library written in C for AVR microcontroller. This code is based on other public repository which i do not remember where it is.
 If someone will recognize code which is not mine and will know repository i will glad add reference here.
 
-## Changes what i made before versioning.
-
-* Fixes:
-    * icmp ping with different length works, before library not response with same icmp length as was request but with constant length
-
-* Improvements:
-    * tcp can handle multiple established connections
-    * synchronous wait for packet if receive different packet than expected will send received packed in to main loop function for handle except drop
-    * arp broadcast responses are cached
-
 ## Versions
 
 Current version **0.1.4**
@@ -20,6 +10,10 @@ Current version **0.1.4**
 ```console
 git clone -b 0.1.4 git@github.com:Triplkrypl/avr-net-enc28j60.git
 ```
+
+Development version **0.2**
+
+[Changes](CHANGES.md)
 
 ## Requires
 
@@ -102,6 +96,9 @@ git clone -b 0.1.4 git@github.com:Triplkrypl/avr-net-enc28j60.git
 // if you want implement other protocol which used tcp and use http to, turn tcp callback on
 // all tcp callback is not call on packet related to http protocol, this packets is handled inside http.c
 #define HTTP_TCP_INCLUDED 0
+// you can define end of all outgoing http header rows by default is used windows row ending,
+// change only if you know than application on other side accept other row ending
+//#define HTTP_HEADER_ROW_BREAK "\r\n"
 
 // you have to define your cpu frequency because of delay.h library
 #define F_CPU 16000000UL
@@ -133,7 +130,7 @@ int main(){
 
 ### Callback functions
 
-If you include tcp.c, you have to define functions callback TcpOnNewConnection, TcpOnConnect, TcpOnIncomingData, TcpOnDisconnect
+If you include **tcp.c**, you have to **define** functions callback **TcpOnNewConnection**, **TcpOnConnect**, **TcpOnIncomingData**, **TcpOnDisconnect**
 You also have to define this callbacks if you include http.c and define HTTP_TCP_INCLUDED as 1
 
 ```c
@@ -184,7 +181,7 @@ void TcpOnDisconnect(const unsigned char connectionId){
 }
 ```
 
-If you include udp.c, you have to define function callback UdpOnIncomingDatagram
+If you include **udp.c**, you have to **define** function callback **UdpOnIncomingDatagram**
 
 ```c
 // function called any time if any UPD datagram income into AVR except UDP datagram cathed by synchronous wait
@@ -202,19 +199,21 @@ unsigned char UdpOnIncomingDatagram(const UdpDatagram datagram, const unsigned c
 }
 ```
 
-If you include http.c, you have to define function callback HttpOnIncomingRequest
+If you include **http.c**, you have to **define** function callback **HttpOnIncomingRequest**
 ```c
 // function called any time if http request if fully parsed and ready to be processed
 // only request incoming with destination HTTP_SERVER_PORT is allow for parsing and passed in this callback
-// response should be send by function HttpSendResponse called inside this callback
+// response must be send by function HttpSendResponse called inside this callback
 // response is not returned as return value because otherwise is dynamic allocation needed
-// if HttpSendResponse is not called, library return 204 response because nothing is send
+// if HttpSendResponse is not called, library close tcp connection without send any response after callback ends
 // any 404 and 500 or other applications errors have to be handled in application
+// request analysis in application must be made before any other http communication,
+// global memory allocated for request is reused for save memory on stack and data can be modified
 void HttpOnIncomingRequest(const HttpRequest* request){
  if(strcmp(request->method, "GET") == 0 && CharsCmp(request->url, request->urlLength, "/some-url", strlen("/some-url"))){
   // do some logic
   HttpStatus status = {200, "OK"};
-  HttpSendResponse(&status, "SomeHeader: :-)\n", strlen("SomeHeader: :-)\n"), "SomeData", strlen("SomeData"));
+  HttpSendResponse(&status, "SomeHeader: :-)" HTTP_HEADER_ROW_BREAK, strlen("SomeHeader: :-)" HTTP_HEADER_ROW_BREAK), "SomeData", strlen("SomeData"));
   return;
  }
  HttpStatus status = {404, "Not Found"};
@@ -224,7 +223,7 @@ void HttpOnIncomingRequest(const HttpRequest* request){
 
 ### Functions
 
-Functions from tcp.c TcpGetConnection, TcpConnect, TcpSendData, TcpReceiveData, TcpDisconnect
+Functions from **tcp.c TcpGetConnection**, **TcpConnect**, **TcpSendData**, **TcpReceiveData**, **TcpDisconnect**
 
 ```c
 // function return connection structure pointer with information about TCP connection remote ip, mac, port...
@@ -240,7 +239,9 @@ unsigned char TcpConnect(const unsigned char ip[IP_V4_ADDRESS_SIZE], const unsig
 // you can send bigger data than NET_BUFFER_SIZE if you do this data is send in multiple packet
 unsigned char TcpSendData(const unsigned char connectionId, const unsigned short timeout, const unsigned char *data, unsigned short dataLength);
 
-// synchronous waiting for data with timeout, after receive data is accessible by double pointer **data variable
+// synchronous waiting for data with milliseconds timeout, zero timeout value means infinite waiting,
+// in infinite timeout, function ends only if receive data or connection is closed
+// after receive data are accessible by double pointer **data parameter
 // this function is good if you send data as client and waiting for response from server,
 // not use this function in TcpOnIncomingData on parameter connectionId another data will came in next callback call
 // receive data by this function will never be send into TcpOnIncomingData callback
@@ -253,7 +254,7 @@ unsigned char TcpReceiveData(const unsigned char connectionId, const unsigned sh
 unsigned char TcpDisconnect(const unsigned char connectionId, unsigned short timeout);
 ```
 
-Functions from udp.c UdpSendDataMac, UdpSendData, UdpSendDataTmpPort, UdpReceiveData
+Functions from **udp.c UdpSendDataMac**, **UdpSendData**, **UdpSendDataTmpPort**, **UdpReceiveData**
 
 ```c
 // send data into any host, you need know mac address,
@@ -288,31 +289,46 @@ unsigned short UdpSendDataTmpPort(const unsigned char *ip, const unsigned short 
 unsigned char UdpReceiveData(const unsigned char *ip, const unsigned short remotePort, const unsigned port, unsigned short timeout, unsigned char **data, unsigned short *dataLength);
 ```
 
-Functions from http.c HttpParseHeaderValue, HttpSendResponse
+Functions from **http.c HttpParseHeaderValue**, **HttpSendResponse**, **HttpSendRequest**
 
 ```c
-// function parse value from http header rows, first parameter is request as source of headers
+// function parse value from http header rows, first parameter is http message as source of headers
 // second parameter is header row key name for look up
-// if header key name are more than once in request first one value is returned
-// if header key name is not found in request, structure with zero length and zero pointer value is returned
-// example: HttpParseHeaderValue(request, "Host"); with request headers:
+// if header key name are more than once in message first one value is returned
+// if header key name is not found in message, structure with zero length and zero pointer value is returned
+// example: HttpParseHeaderValue(message, "Host"); with http headers:
 // Host: somewhere.org
 // SomeHeader: aaaaaaa
 //
-// will return structure with 13 length and "somewhere.org" value pointing into request structure without ending zero char
-const HttpHeaderValue HttpParseHeaderValue(const HttpRequest *request, const unsigned char *header);
+// will return structure with 13 length and "somewhere.org" value pointing into message structure without ending zero char
+const HttpHeaderValue HttpParseHeaderValue(const HttpMessage *message, const unsigned char *header);
 
 // function send http response into network while is some request processed in callback HttpOnIncomingRequest
 // function return 1 on success 0 on any error
 // can be called only once per callback call and only if request is processed, in other http listener internal state return 0 as error
 // if HttpStatus.message is 0 pointer default status message is filed by library
 // headers parameter is all additional response header rows example:
-// ContentType: json
-// Language: en
-//
-// all header row have to end with \n character
+// "ContentType: json" HTTP_HEADER_ROW_BREAK
+// "Language: en" HTTP_HEADER_ROW_BREAK
+// all header rows have to end with HTTP_HEADER_ROW_BREAK string value
+// usage of defined constant HTTP_HEADER_ROW_BREAK is important due to consistent rows end sent by library and rows end in application
 // headersLength parameter is length of headers parameter in bytes, if zero length is set no additional headers are send and headers parameter is ignored
 // data parameter is data send in response body if dataLength is zero no body is send and data parameter is ignored
 unsigned char HttpSendResponse(const HttpStatus *status, unsigned char *headers, unsigned short headersLength, unsigned char *data, unsigned short dataLength);
+
+// function send http request and synchronously wait for response
+// return HttpResponse pointer on any error HttpResponse.status.code is 0 and HttpResponse.status.message contains simple error description
+// connectionTimeout parameter define how long in milliseconds function wait for successful connect before send any request data
+// requestTimeout parameter define how long function wait for response data, zero means infinite timeout
+// method chars array end with zero character
+// headers parameter contains all application request header rows example:
+// "ContentType: json" HTTP_HEADER_ROW_BREAK
+// all header rows must end with HTTP_HEADER_ROW_BREAK
+// headersLength parameter length of application header rows in bytes
+// data parameter is for request body content
+// dataLength parameter length of body content in bytes
+// HttpResponse analyze immediately before any other http communication,
+// structure share memory with HttpRequest and structure data can be rewritten
+const HttpResponse* HttpSendRequest(const unsigned char *ip, const unsigned short port, const unsigned short connectionTimeout, unsigned short requestTimeout, const unsigned char *method, const unsigned char *url, const unsigned char urlLength, const unsigned char *headers, const unsigned short headersLength, const unsigned char *data, unsigned short dataLength);
 ```
 
