@@ -74,7 +74,8 @@ Supported version **0.2**
 #define NET_ARP_CACHE_SIZE 5
 // define for tcp.c include
 // define how many tcp connection can live in AVR (server/client connections)
-// if number connections is equal as limit all new incoming TCP connections is dropped
+// if number connections is equal as limit all new incoming TCP connections are dropped,
+// and TcpConnect function call will return TCP_INVALID_CONNECTION_ID
 // bigger value allow more connected hosts at one time
 // lower value is RAM free
 #define TCP_MAX_CONNECTIONS 2
@@ -94,7 +95,7 @@ Supported version **0.2**
 // if tcp callbacks is turn on have to be defined in application as if tcp.c is included
 // if you want use only http protocol you do not need this define and use default value 0
 // if you want implement other protocol which used tcp and use http to, turn tcp callback on
-// all tcp callback is not call on packet related to http protocol, this packets is handled inside http.c
+// all tcp callback is not call on packet related to http protocol, this packets are handled inside http.c
 #define HTTP_TCP_INCLUDED 0
 // you can define end of all outgoing http header rows by default is used windows row ending,
 // change only if you know than application on other side accept other row ending
@@ -109,7 +110,7 @@ Supported version **0.2**
 //#include "src/udp.c"
 // include tcp.c if you want handle incoming TCP connection or connect somewhere
 //#include "src/tcp.c"
-// include http.c if you want handle incoming HTTP requests
+// include http.c if you want handle incoming HTTP requests or send them
 //#include "src/http.c"
 // include one of icmp.c or udp.c or tcp.c or http.c,
 // otherwise AVR will only response on ARP and it is little useless :-)
