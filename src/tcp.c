@@ -584,7 +584,9 @@ void TcpHandleIncomingPacket(unsigned char *buffer, unsigned short length){
     return;
    }
    if(result == NET_HANDLE_RESULT_REJECT){
+    #ifdef ICMP
     IcmpSendUnreachable(buffer, connections[connectionId].mac, connections[connectionId].ip, CharsToShort(buffer + IP_TOTLEN_H_P));
+    #endif
     connections[connectionId].state = TCP_STATE_NO_CONNECTION;
     return;
    }
