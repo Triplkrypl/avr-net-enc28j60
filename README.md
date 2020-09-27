@@ -5,10 +5,10 @@ If someone will recognize code which is not mine and will know repository i will
 
 ## Versions
 
-Current version **0.2.0**
+Current version **0.2.1**
 
 ```console
-git clone -b 0.2.0 git@github.com:Triplkrypl/avr-net-enc28j60.git
+git clone -b 0.2.1 git@github.com:Triplkrypl/avr-net-enc28j60.git
 ```
 
 Supported version **0.2**
