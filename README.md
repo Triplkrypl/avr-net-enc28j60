@@ -141,6 +141,8 @@ You also have to define this callbacks if you include http.c and define HTTP_TCP
 // NET_HANDLE_RESULT_DROP drop new connection without any response for sender
 // NET_HANDLE_RESULT_OK accept new connection and allow established connection
 // NET_HANDLE_RESULT_REJECT not allow established connection and library send icmp unreachable packet
+// icmp packet is send only if icmp.c is included
+// without icmp protocol NET_HANDLE_RESULT_REJECT behave as NET_HANDLE_RESULT_DROP
 unsigned char TcpOnNewConnection(const unsigned char connectionId){
  if(TcpGetConnection(connectionId)->port != 80){
   return NET_HANDLE_RESULT_DROP;
@@ -190,7 +192,8 @@ If you include **udp.c**, you have to **define** function callback **UdpOnIncomi
 // NET_HANDLE_RESULT_DROP inform library that your application code nothing do with datagram
 // NET_HANDLE_RESULT_OK inform library that your application code do somethink with datagram
 // NET_HANDLE_RESULT_REJECT inform library that your application code nothing do with datagram
-// after that library send unreachable icmp packet
+// after that library send unreachable icmp packet, icmp packet is send only if icmp.c is included
+// without icmp protocol NET_HANDLE_RESULT_REJECT behave as NET_HANDLE_RESULT_DROP
 unsigned char UdpOnIncomingDatagram(const UdpDatagram datagram, const unsigned char *data, unsigned short dataLength){
  if(datagram.port == 5000){
   // do something
